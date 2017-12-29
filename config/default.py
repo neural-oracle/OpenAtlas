@@ -9,7 +9,7 @@ DEMO_MODE = False  # If in demo mode some options are disabled and the login for
 
 LANGUAGES = {'en': 'English', 'de': 'Deutsch'}
 
-DATABASE_NAME = 'openatlas'
+DATABASE_NAME = 'openatlas_medcon'
 DATABASE_USER = 'openatlas'
 DATABASE_HOST = 'localhost'
 DATABASE_PORT = 5432
