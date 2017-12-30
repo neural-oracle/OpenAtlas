@@ -49,7 +49,6 @@
         <div id="header">
             <div id="logo"><a href="/"></a></div>
             <div id="site-name">
-                {{ session['settings']['site_name'] }}
                 {% if 'local' in request['url_root'] %}local{% endif %}
                 <noscript><div class="error">{{ _('warning no js') }}</div></noscript>
                 <br /><br />
