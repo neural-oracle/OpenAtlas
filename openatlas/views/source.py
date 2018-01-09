@@ -8,7 +8,7 @@ from wtforms.validators import InputRequired
 
 import openatlas
 from openatlas import app
-from openatlas.forms import build_form
+from openatlas.forms.forms import build_form
 from openatlas.models.entity import EntityMapper, Entity
 from openatlas.models.link import LinkMapper
 from openatlas.util.util import (link, truncate_string, required_group, get_entity_data, uc_first,
@@ -47,6 +47,8 @@ def source_insert(origin_id=None):
         del form.insert_and_continue
     if form.validate_on_submit():
         result = save(form, None, origin)
+        if not result:  # pragma: no cover
+            return render_template('source/insert.html', form=form, origin=origin)
         flash(_('entity created'), 'info')
         if not isinstance(result, Entity):
             return redirect(url_for('reference_link_update', link_id=result, origin_id=origin_id))
@@ -64,7 +66,7 @@ def source_insert(origin_id=None):
 @required_group('readonly')
 def source_view(id_, unlink_id=None):
     source = EntityMapper.get_by_id(id_)
-    if unlink_id and is_authorized('editor'):
+    if unlink_id:
         LinkMapper.delete_by_id(unlink_id)
         flash(_('link removed'), 'info')
     tables = {
@@ -164,13 +166,14 @@ def source_update(id_):
             modifier = openatlas.logger.get_log_for_advanced_view(source.id)['modifier_name']
             return render_template(
                 'source/update.html', form=form, source=source, modifier=modifier)
-        save(form, source)
-        flash(_('info update'), 'info')
+        if save(form, source):
+            flash(_('info update'), 'info')
         return redirect(url_for('source_view', id_=id_))
     return render_template('source/update.html', form=form, source=source)
 
 
 def save(form, source=None, origin=None):
+    link_ = None
     openatlas.get_cursor().execute('BEGIN')
     try:
         if source:
@@ -182,7 +185,6 @@ def save(form, source=None, origin=None):
         source.description = form.description.data
         source.update()
         source.save_nodes(form)
-        link_ = None
         if origin:
             if origin.class_.code in app.config['CLASS_CODES']['reference']:
                 link_ = origin.link('P67', source)
