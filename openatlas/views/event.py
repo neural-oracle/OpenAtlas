@@ -3,14 +3,13 @@ import ast
 
 from flask import flash, render_template, url_for, request
 from flask_babel import lazy_gettext as _
-from flask_wtf import Form
 from werkzeug.utils import redirect
 from wtforms import HiddenField, StringField, SubmitField, TextAreaField
 from wtforms.validators import InputRequired
 
 import openatlas
 from openatlas import app
-from openatlas.forms import DateForm, build_form, TableField, TableMultiField
+from openatlas.forms.forms import DateForm, build_form, TableField, TableMultiField
 from openatlas.models.entity import EntityMapper
 from openatlas.models.link import LinkMapper, Link
 from openatlas.util.util import (required_group, truncate_string, get_entity_data, uc_first,
@@ -36,7 +35,7 @@ class EventForm(DateForm):
     def validate(self, extra_validators=None):
         """Check if selected super event is allowed"""
         # Todo: also check if super is not a sub event of itself (recursively)
-        valid = Form.validate(self)
+        valid = DateForm.validate(self)
         if self.event.data:
             if str(self.event.data) == str(self.event_id.data):
                 self.event.errors.append(_('error node self as super'))
@@ -68,6 +67,8 @@ def event_insert(code, origin_id=None):
         del form.insert_and_continue
     if form.validate_on_submit():
         result = save(form, None, code, origin)
+        if not result:  # pragma: no cover
+            return render_template('event/insert.html', form=form, code=code, origin=origin)
         flash(_('entity created'), 'info')
         if isinstance(result, Link) and result.property_code == 'P67':
             return redirect(url_for('reference_link_update', link_id=result, origin_id=origin_id))
@@ -113,8 +114,8 @@ def event_update(id_):
             flash(_('error modified'), 'error')
             modifier = openatlas.logger.get_log_for_advanced_view(event.id)['modifier_name']
             return render_template('event/update.html', form=form, event=event, modifier=modifier)
-        save(form, event)
-        flash(_('info update'), 'info')
+        if save(form, event):
+            flash(_('info update'), 'info')
         return redirect(url_for('event_view', id_=id_))
     super_event = event.get_linked_entity('P117')
     form.event.data = super_event.id if super_event else ''
@@ -132,7 +133,7 @@ def event_update(id_):
 @required_group('readonly')
 def event_view(id_, unlink_id=None):
     event = EntityMapper.get_by_id(id_)
-    if unlink_id and is_authorized('editor'):
+    if unlink_id:
         LinkMapper.delete_by_id(unlink_id)
         flash(_('link removed'), 'info')
     event.set_dates()
@@ -230,4 +231,5 @@ def save(form, event=None, code=None, origin=None):
         openatlas.get_cursor().execute('ROLLBACK')
         openatlas.logger.log('error', 'database', 'transaction failed', e)
         flash(_('error transaction'), 'error')
+        return
     return link_ if link_ else event

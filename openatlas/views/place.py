@@ -7,7 +7,7 @@ from wtforms.validators import InputRequired
 
 import openatlas
 from openatlas import app
-from openatlas.forms import DateForm, build_form
+from openatlas.forms.forms import DateForm, build_form
 from openatlas.models.entity import EntityMapper, Entity
 from openatlas.models.gis import GisMapper
 from openatlas.models.link import LinkMapper
@@ -47,6 +47,9 @@ def place_insert(origin_id=None):
         del form.insert_and_continue
     if form.validate_on_submit():
         result = save(form, None, None, origin)
+        if not result:  # pragma: no cover
+            gis_data = GisMapper.get_all()
+            return render_template('place/insert.html', form=form, origin=origin, gis_data=gis_data)
         flash(_('entity created'), 'info')
         if not isinstance(result, Entity):
             return redirect(url_for('reference_link_update', link_id=result, origin_id=origin_id))
@@ -66,7 +69,7 @@ def place_insert(origin_id=None):
 @required_group('readonly')
 def place_view(id_, unlink_id=None):
     object_ = EntityMapper.get_by_id(id_)
-    if unlink_id and is_authorized('editor'):
+    if unlink_id:
         LinkMapper.delete_by_id(unlink_id)
         flash(_('link removed'), 'info')
     object_.set_dates()
@@ -149,8 +152,8 @@ def place_update(id_):
             modifier = openatlas.logger.get_log_for_advanced_view(object_.id)['modifier_name']
             return render_template(
                 'place/update.html', form=form, object_=object_, modifier=modifier)
-        save(form, object_, location)
-        flash(_('info update'), 'info')
+        if save(form, object_, location):
+            flash(_('info update'), 'info')
         return redirect(url_for('place_view', id_=id_))
     for alias in [x.name for x in object_.get_linked_entities('P1')]:
         form.alias.append_entry(alias)
@@ -195,4 +198,5 @@ def save(form, object_=None, location=None, origin=None):
         openatlas.get_cursor().execute('ROLLBACK')
         openatlas.logger.log('error', 'database', 'transaction failed', e)
         flash(_('error transaction'), 'error')
+        return
     return link_ if link_ else object_

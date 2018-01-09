@@ -8,7 +8,7 @@ from wtforms.validators import InputRequired
 
 import openatlas
 from openatlas import app
-from openatlas.forms import build_form, TableField
+from openatlas.forms.forms import build_form, TableField
 from openatlas.models.entity import EntityMapper
 from openatlas.models.link import LinkMapper
 from openatlas.util.util import (uc_first, truncate_string, required_group, get_entity_data,
@@ -113,7 +113,7 @@ def reference_link_update(link_id, origin_id):
 @required_group('readonly')
 def reference_view(id_, unlink_id=None):
     reference = EntityMapper.get_by_id(id_)
-    if unlink_id and is_authorized('editor'):
+    if unlink_id:
         LinkMapper.delete_by_id(unlink_id)
         flash(_('link removed'), 'info')
     tables = {'info': get_entity_data(reference)}
@@ -157,6 +157,8 @@ def reference_insert(code, origin_id=None):
         del form.insert_and_continue
     if form.validate_on_submit():
         result = save(form, None, code, origin)
+        if not result:  # pragma: no cover
+            return render_template('reference/insert.html', form=form, code=code, origin=origin)
         flash(_('entity created'), 'info')
         if origin:
             return redirect(url_for('reference_link_update', link_id=result, origin_id=origin_id))
@@ -194,8 +196,8 @@ def reference_update(id_):
             modifier = openatlas.logger.get_log_for_advanced_view(reference.id)['modifier_name']
             return render_template(
                 'reference/update.html', form=form, reference=reference, modifier=modifier)
-        save(form, reference)
-        flash(_('info update'), 'info')
+        if save(form, reference):
+            flash(_('info update'), 'info')
         return redirect(url_for('reference_view', id_=id_))
     return render_template('reference/update.html', form=form, reference=reference)
 
@@ -223,4 +225,5 @@ def save(form, reference, code=None, origin=None):
         openatlas.get_cursor().execute('ROLLBACK')
         openatlas.logger.log('error', 'database', 'transaction failed', e)
         flash(_('error transaction'), 'error')
+        return
     return link_ if link_ else reference
