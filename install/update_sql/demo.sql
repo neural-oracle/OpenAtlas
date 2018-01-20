@@ -22,7 +22,7 @@ DELETE FROM model.entity WHERE id IN (
             l1.domain_id IS NULL
             AND l2.range_id IS NULL
             AND lp2.range_id IS NULL
-            AND e.class_code IN 'E61');
+            AND e.class_code IN ('E61', 'E41', 'E53', 'E82'));
 
 -- re-enable triggers
 ALTER TABLE model.entity ENABLE TRIGGER on_delete_entity;
