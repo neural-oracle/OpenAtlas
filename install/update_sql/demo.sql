@@ -1,3 +1,6 @@
+-- sql to filter demo data from MEDCON
+-- don't forget that passwords are not valid anymore after 3.0.0 update
+
 -- deactivate triggers, otherwise script takes forever
 ALTER TABLE model.entity DISABLE TRIGGER on_delete_entity;
 ALTER TABLE model.link_property DISABLE TRIGGER on_delete_link_property;
