@@ -1,5 +1,5 @@
 # Copyright 2017 by Alexander Watzinger and others. Please see README.md for licensing information
-from flask import render_template, url_for, flash, request
+from flask import render_template, url_for, flash, request, g
 from flask_babel import lazy_gettext as _
 from flask_wtf import Form
 from werkzeug.utils import redirect
@@ -119,7 +119,7 @@ def reference_view(id_, unlink_id=None):
     tables = {'info': get_entity_data(reference)}
     for name in ['source', 'event', 'actor', 'place']:
         header = app.config['TABLE_HEADERS'][name] + ['page']
-        tables[name] = {'name': name, 'header': header, 'data': []}
+        tables[name] = {'id': name, 'header': header, 'data': []}
     for link_ in reference.get_links('P67'):
         name = app.config['CODE_CLASS'][link_.range.class_.code]
         data = get_base_table_data(link_.range)
@@ -138,7 +138,7 @@ def reference_view(id_, unlink_id=None):
 @required_group('readonly')
 def reference_index():
     header = app.config['TABLE_HEADERS']['reference'] + ['description']
-    table = {'name': 'reference', 'header': header, 'data': []}
+    table = {'id': 'reference', 'header': header, 'data': []}
     for reference in EntityMapper.get_by_codes('reference'):
         data = get_base_table_data(reference)
         data.append(truncate_string(reference.description))
@@ -171,14 +171,14 @@ def reference_insert(code, origin_id=None):
 @app.route('/reference/delete/<int:id_>')
 @required_group('editor')
 def reference_delete(id_):
-    openatlas.get_cursor().execute('BEGIN')
+    g.cursor.execute('BEGIN')
     try:
         EntityMapper.delete(id_)
         openatlas.logger.log_user(id_, 'delete')
-        openatlas.get_cursor().execute('COMMIT')
+        g.cursor.execute('COMMIT')
         flash(_('entity deleted'), 'info')
     except Exception as e:  # pragma: no cover
-        openatlas.get_cursor().execute('ROLLBACK')
+        g.cursor.execute('ROLLBACK')
         openatlas.logger.log('error', 'database', 'transaction failed', e)
         flash(_('error transaction'), 'error')
     return redirect(url_for('reference_index'))
@@ -203,7 +203,7 @@ def reference_update(id_):
 
 
 def save(form, reference, code=None, origin=None):
-    openatlas.get_cursor().execute('BEGIN')
+    g.cursor.execute('BEGIN')
     try:
         if reference:
             openatlas.logger.log_user(reference.id, 'update')
@@ -220,9 +220,9 @@ def save(form, reference, code=None, origin=None):
         reference.update()
         reference.save_nodes(form)
         link_ = reference.link('P67', origin) if origin else None
-        openatlas.get_cursor().execute('COMMIT')
+        g.cursor.execute('COMMIT')
     except Exception as e:  # pragma: no cover
-        openatlas.get_cursor().execute('ROLLBACK')
+        g.cursor.execute('ROLLBACK')
         openatlas.logger.log('error', 'database', 'transaction failed', e)
         flash(_('error transaction'), 'error')
         return
