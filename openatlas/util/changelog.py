@@ -3,16 +3,21 @@ from collections import OrderedDict
 
 
 class Changelog:
-    """
-        A big OrderedDict with changelog data, maybe not the best place and format to keep it.
-    """
+    """ A big OrderedDict with changelog data, maybe not the best place and format to keep it."""
     versions = OrderedDict()
+    versions['3.2.0'] = {
+        'date': '2018-02-10',
+        'data': OrderedDict(
+            feature=OrderedDict([
+                ('732', 'Documentation and manual'),
+                ('888', 'User and activity view'),
+                ('879', 'Demo with MEDCON data')]))}
     versions['3.1.0'] = {
-            'date': '2018-01-18',
-            'data': OrderedDict(
-                feature=OrderedDict([
-                    ('863', 'BC dates and date validation'),
-                    ('780', 'Color Schemes')]))}
+        'date': '2018-01-18',
+        'data': OrderedDict(
+            feature=OrderedDict([
+                ('863', 'BC dates and date validation'),
+                ('780', 'Color Schemes')]))}
     versions['3.0.0'] = {
         'date': '2017-12-31',
         'data': OrderedDict(
@@ -247,16 +252,9 @@ class Changelog:
                 ('318', 'CRM - properties'),
                 ('318', 'CRM - relations (super/sub classes, domains, ranges'),
                 ('318', 'OpenAtlas shortcuts')]))}
-    versions['0.0.2'] = {
-        'date': '2014-12-03',
-        'data': OrderedDict(
-            feature=OrderedDict([
-                ('306', 'CIDOC classes'),
-                ('308', 'Database design'),
-                ('314', 'Feedback form and translations')]))}
     versions['0.0.1'] = {
         'date': '2014-11-05',
         'data': OrderedDict(
             feature=OrderedDict([
                 ('', 'Initial version based on the "Zend Base" project from '
-                     '<a target="_blank" href="http://craws.net">craws.net</a>')]))}
+                     '<a target="_blank" rel="noopener" href="http://craws.net">craws.net</a>')]))}

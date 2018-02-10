@@ -1,5 +1,5 @@
 # Copyright 2017 by Alexander Watzinger and others. Please see README.md for licensing information
-from flask import render_template, url_for, flash, request
+from flask import render_template, url_for, flash, request, g
 from flask_babel import lazy_gettext as _
 from werkzeug.utils import redirect
 from wtforms import StringField, TextAreaField, HiddenField, SubmitField, FieldList
@@ -11,9 +11,8 @@ from openatlas.forms.forms import DateForm, build_form
 from openatlas.models.entity import EntityMapper, Entity
 from openatlas.models.gis import GisMapper
 from openatlas.models.link import LinkMapper
-from openatlas.util.util import (truncate_string, required_group, get_entity_data, uc_first,
-                                 build_remove_link, get_base_table_data, link, is_authorized,
-                                 was_modified)
+from openatlas.util.util import (build_remove_link, required_group, get_entity_data, uc_first, link,
+                                 truncate_string, get_base_table_data, is_authorized, was_modified)
 
 
 class PlaceForm(DateForm):
@@ -31,7 +30,7 @@ class PlaceForm(DateForm):
 @app.route('/place')
 @required_group('readonly')
 def place_index():
-    table = {'name': 'place', 'header': app.config['TABLE_HEADERS']['place'], 'data': []}
+    table = {'id': 'place', 'header': app.config['TABLE_HEADERS']['place'], 'data': []}
     for place in EntityMapper.get_by_codes('place'):
         table['data'].append(get_base_table_data(place))
     return render_template('place/index.html', table=table, gis_data=GisMapper.get_all())
@@ -77,12 +76,10 @@ def place_view(id_, unlink_id=None):
     tables = {
         'info': get_entity_data(object_, location),
         'source': {
-            'name': 'source',
-            'header': app.config['TABLE_HEADERS']['source'] + ['description'],
+            'id': 'source', 'header': app.config['TABLE_HEADERS']['source'] + ['description'],
             'data': []},
         'reference': {
-            'name': 'reference',
-            'header': app.config['TABLE_HEADERS']['reference'] + ['pages'],
+            'id': 'reference', 'header': app.config['TABLE_HEADERS']['reference'] + ['pages'],
             'data': []}}
     for link_ in object_.get_links('P67', True):
         name = app.config['CODE_CLASS'][link_.domain.class_.code]
@@ -99,20 +96,20 @@ def place_view(id_, unlink_id=None):
             data.append(build_remove_link(unlink_url, link_.domain.name))
         tables[name]['data'].append(data)
     tables['event'] = {
-        'name': 'event',
+        'id': 'event',
         'header': app.config['TABLE_HEADERS']['event'],
         'data': []}
     for event in location.get_linked_entities(['P7', 'P24'], True):
         tables['event']['data'].append(get_base_table_data(event))
     tables['actor'] = {
-        'name': 'actor',
+        'id': 'actor',
         'header': [_('actor'), _('property'), _('class'), _('first'), _('last')],
         'data': []}
     for link_ in location.get_links(['P74', 'OA8', 'OA9'], True):
         actor = EntityMapper.get_by_id(link_.domain.id)
         tables['actor']['data'].append([
             link(actor),
-            openatlas.properties[link_.property.code].name,
+            g.properties[link_.property.code].name,
             actor.class_.name,
             actor.first,
             actor.last])
@@ -125,13 +122,13 @@ def place_view(id_, unlink_id=None):
 @app.route('/place/delete/<int:id_>')
 @required_group('editor')
 def place_delete(id_):
-    openatlas.get_cursor().execute('BEGIN')
+    g.cursor.execute('BEGIN')
     try:
         EntityMapper.delete(id_)
         openatlas.logger.log_user(id_, 'delete')
-        openatlas.get_cursor().execute('COMMIT')
+        g.cursor.execute('COMMIT')
     except Exception as e:
-        openatlas.get_cursor().execute('ROLLBACK')
+        g.cursor.execute('ROLLBACK')
         openatlas.logger.log('error', 'database', 'transaction failed', e)
         flash(_('error transaction'), 'error')
     flash(_('entity deleted'), 'info')
@@ -149,7 +146,7 @@ def place_update(id_):
         if was_modified(form, object_):  # pragma: no cover
             del form.save
             flash(_('error modified'), 'error')
-            modifier = openatlas.logger.get_log_for_advanced_view(object_.id)['modifier_name']
+            modifier = link(openatlas.logger.get_log_for_advanced_view(object_.id)['modifier'])
             return render_template(
                 'place/update.html', form=form, object_=object_, modifier=modifier)
         if save(form, object_, location):
@@ -163,7 +160,7 @@ def place_update(id_):
 
 
 def save(form, object_=None, location=None, origin=None):
-    openatlas.get_cursor().execute('BEGIN')
+    g.cursor.execute('BEGIN')
     try:
         if object_:
             for alias in object_.get_linked_entities('P1'):
@@ -193,9 +190,9 @@ def save(form, object_=None, location=None, origin=None):
             else:
                 origin.link('P67', object_)
         GisMapper.insert(location, form)
-        openatlas.get_cursor().execute('COMMIT')
+        g.cursor.execute('COMMIT')
     except Exception as e:  # pragma: no cover
-        openatlas.get_cursor().execute('ROLLBACK')
+        g.cursor.execute('ROLLBACK')
         openatlas.logger.log('error', 'database', 'transaction failed', e)
         flash(_('error transaction'), 'error')
         return
