@@ -1,5 +1,4 @@
 # Copyright 2017 by Alexander Watzinger and others. Please see README.md for licensing information
-import numpy
 import re
 import smtplib
 from collections import OrderedDict
@@ -7,12 +6,13 @@ from datetime import datetime
 from email.header import Header
 from email.mime.text import MIMEText
 from functools import wraps
-
-from babel import dates
-from flask import abort, url_for, request, session, flash
-from flask_login import current_user
-from flask_babel import lazy_gettext as _
 from html.parser import HTMLParser
+
+import numpy
+from babel import dates
+from flask import abort, url_for, request, session, flash, g
+from flask_babel import lazy_gettext as _
+from flask_login import current_user
 from werkzeug.utils import redirect
 
 import openatlas
@@ -93,11 +93,11 @@ def sanitize(string, mode=None):
 
 
 def build_table_form(class_name, linked_entities):
-    """Returns a form with a list of entities with checkboxes"""
+    """ Returns a form with a list of entities with checkboxes"""
     # Todo: add CSRF token
     form = '<form class="table" method="post">'
     header = app.config['TABLE_HEADERS'][class_name] + ['']
-    table = {'name': class_name, 'header': header, 'data': []}
+    table = {'id': class_name, 'header': header, 'data': []}
     linked_ids = [entity.id for entity in linked_entities]
     for entity in EntityMapper.get_by_codes(class_name):
         if entity.id in linked_ids:
@@ -113,7 +113,7 @@ def build_table_form(class_name, linked_entities):
 
 
 def build_remove_link(url, name):
-    """Build a link to remove a link with a JavaScript confirmation dialog"""
+    """ Build a link to remove a link with a JavaScript confirmation dialog"""
     name = name.replace('\'', '')
     confirm = 'onclick="return confirm(\'' + _('Remove %(name)s?', name=name) + '\')"'
     return '<a ' + confirm + ' href="' + url + '">' + uc_first(_('remove')) + '</a>'
@@ -131,7 +131,7 @@ def get_entity_data(entity, location=None):
     for node in nodes:
         if not node.root:
             continue
-        root = openatlas.nodes[node.root[-1]]
+        root = g.nodes[node.root[-1]]
         name = 'type' if root.name in app.config['BASE_TYPES'] else root.name
         if root.name not in type_data:
             type_data[name] = []
@@ -208,15 +208,10 @@ def get_entity_data(entity, location=None):
     if hasattr(current_user, 'settings') and current_user.settings['layout'] == 'advanced':
         data.append((uc_first(_('class')), link(entity.class_)))
         user_log = openatlas.logger.get_log_for_advanced_view(entity.id)
-        created = format_date(entity.created) if entity.modified else ''
-        if user_log['creator_id']:
-            created = format_date(user_log['created']) + ' ' + user_log['creator_name']
-        data.append((_('created'), created))
-        modified = format_date(entity.modified) if entity.modified else None
-        if user_log['modifier_id']:
-            modified = format_date(user_log['modified']) + ' ' + user_log['modifier_name']
-        if modified:
-            data.append((_('modified'), modified))
+        data.append((_('created'), format_date(entity.created) + ' ' + link(user_log['creator'])))
+        if user_log['modified']:
+            info = format_date(user_log['modified']) + ' ' + link(user_log['creator'])
+            data.append((_('modified'), info))
 
     return data
 
@@ -407,7 +402,7 @@ def pager(table):
             options += '<option value="{amount}"{selected}>{amount}</option>'.format(
                 amount=amount, selected=' selected="selected"' if amount == table_rows else '')
         html += """
-            <div id="{name}-pager" class="pager">
+            <div id="{id}-pager" class="pager">
                 <div class="navigation first"></div>
                 <div class="navigation prev"></div>
                 <div class="pagedisplay">
@@ -416,11 +411,11 @@ def pager(table):
                 <div class="navigation next"></div>
                 <div class="navigation last"></div>
                 <div><select class="pagesize">{options}</select></div>
-                <input id="{name}-search" class="search" type="text" data-column="all"
+                <input id="{id}-search" class="search" type="text" data-column="all"
                     placeholder="{filter}">
             </div><div style="clear:both;"></div>
-            """.format(name=table['name'], filter=uc_first(_('filter')), options=options)
-    html += '<table id="{name}-table" class="tablesorter"><thead><tr>'.format(name=table['name'])
+            """.format(id=table['id'], filter=uc_first(_('filter')), options=options)
+    html += '<table id="{id}-table" class="tablesorter"><thead><tr>'.format(id=table['id'])
     for header in table['header']:
         style = '' if header else 'class=sorter-false '  # only show and sort headers with a title
         html += '<th ' + style + '>' + (_(header).capitalize() if header else '') + '</th>'
@@ -442,23 +437,23 @@ def pager(table):
     sort = '' if 'sort' not in table else table['sort'] + ','
     if show_pager:
         html += """
-            $("#{name}-table").tablesorter({{
+            $("#{id}-table").tablesorter({{
                 {headers}
                 {sort}
                 dateFormat: "ddmmyyyy",
                 widgets: [\'zebra\', \'filter\'],
                 widgetOptions: {{
-                    filter_external: \'#{name}-search\',
+                    filter_external: \'#{id}-search\',
                     filter_columnFilters: false
                 }}}})
-            .tablesorterPager({{positionFixed: false, container: $("#{name}-pager"), size:{size}}});
+            .tablesorterPager({{positionFixed: false, container: $("#{id}-pager"), size:{size}}});
         """.format(
-            name=table['name'],
+            id=table['id'],
             sort=sort,
             size=table_rows,
             headers='' if 'headers' not in table else table['headers'] + ',')
     else:
-        html += '$("#' + table['name'] + '-table").tablesorter({' + sort + 'widgets:[\'zebra\']});'
+        html += '$("#' + table['id'] + '-table").tablesorter({' + sort + 'widgets:[\'zebra\']});'
     html += '</script>'
     return html
 
@@ -468,7 +463,7 @@ def get_base_table_data(entity):
     name = app.config['CODE_CLASS'][entity.class_.code]
     data = [link(entity)]
     if name in ['event', 'actor']:
-        data.append(openatlas.classes[entity.class_.code].name)
+        data.append(g.classes[entity.class_.code].name)
     if name in ['reference']:
         data.append(uc_first(_(entity.system_type)))
     if name in ['event', 'place', 'source', 'reference']:

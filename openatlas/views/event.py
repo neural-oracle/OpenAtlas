@@ -1,7 +1,7 @@
 # Copyright 2017 by Alexander Watzinger and others. Please see README.md for licensing information
 import ast
 
-from flask import flash, render_template, url_for, request
+from flask import flash, render_template, url_for, request, g
 from flask_babel import lazy_gettext as _
 from werkzeug.utils import redirect
 from wtforms import HiddenField, StringField, SubmitField, TextAreaField
@@ -12,9 +12,8 @@ from openatlas import app
 from openatlas.forms.forms import DateForm, build_form, TableField, TableMultiField
 from openatlas.models.entity import EntityMapper
 from openatlas.models.link import LinkMapper, Link
-from openatlas.util.util import (required_group, truncate_string, get_entity_data, uc_first,
-                                 build_remove_link, get_base_table_data, link, is_authorized,
-                                 was_modified)
+from openatlas.util.util import (build_remove_link, get_base_table_data, get_entity_data, uc_first,
+                                 is_authorized, link, required_group, truncate_string, was_modified)
 
 
 class EventForm(DateForm):
@@ -27,7 +26,6 @@ class EventForm(DateForm):
     insert_and_continue = SubmitField(_('insert and continue'))
     continue_ = HiddenField()
     opened = HiddenField()
-    # acquisition
     recipient = TableMultiField()
     donor = TableMultiField()
     given_place = TableMultiField()
@@ -47,7 +45,7 @@ class EventForm(DateForm):
 @required_group('readonly')
 def event_index():
     header = app.config['TABLE_HEADERS']['event'] + ['description']
-    table = {'name': 'event', 'header': header, 'data': []}
+    table = {'id': 'event', 'header': header, 'data': []}
     for event in EntityMapper.get_by_codes('event'):
         data = get_base_table_data(event)
         data.append(truncate_string(event.description))
@@ -86,14 +84,14 @@ def event_insert(code, origin_id=None):
 @app.route('/event/delete/<int:id_>')
 @required_group('editor')
 def event_delete(id_):
-    openatlas.get_cursor().execute('BEGIN')
+    g.cursor.execute('BEGIN')
     try:
         EntityMapper.delete(id_)
         openatlas.logger.log_user(id_, 'delete')
-        openatlas.get_cursor().execute('COMMIT')
+        g.cursor.execute('COMMIT')
         flash(_('entity deleted'), 'info')
     except Exception as e:  # pragma: no cover
-        openatlas.get_cursor().execute('ROLLBACK')
+        g.cursor.execute('ROLLBACK')
         openatlas.logger.log('error', 'database', 'transaction failed', e)
         flash(_('error transaction'), 'error')
     return redirect(url_for('event_index'))
@@ -112,7 +110,7 @@ def event_update(id_):
         if was_modified(form, event):  # pragma: no cover
             del form.save
             flash(_('error modified'), 'error')
-            modifier = openatlas.logger.get_log_for_advanced_view(event.id)['modifier_name']
+            modifier = link(openatlas.logger.get_log_for_advanced_view(event.id)['modifier'])
             return render_template('event/update.html', form=form, event=event, modifier=modifier)
         if save(form, event):
             flash(_('info update'), 'info')
@@ -140,7 +138,7 @@ def event_view(id_, unlink_id=None):
     tables = {
         'info': get_entity_data(event),
         'actor': {
-            'name': 'actor',
+            'id': 'actor',
             'header': ['actor', 'class', 'involvement', 'first', 'last', 'description'],
             'data': []}}
     for link_ in event.get_links(['P11', 'P14', 'P22', 'P23']):
@@ -152,7 +150,7 @@ def event_view(id_, unlink_id=None):
             last = '<span class="inactive" style="float:right">' + str(event.last) + '</span>'
         data = ([
             link(link_.range),
-            openatlas.classes[link_.range.class_.code].name,
+            g.classes[link_.range.class_.code].name,
             link_.type.name if link_.type else '',
             first,
             last,
@@ -164,12 +162,10 @@ def event_view(id_, unlink_id=None):
             data.append(build_remove_link(unlink_url, link_.range.name))
         tables['actor']['data'].append(data)
     tables['source'] = {
-        'name': 'source',
-        'header': app.config['TABLE_HEADERS']['source'] + ['description'],
+        'id': 'source', 'header': app.config['TABLE_HEADERS']['source'] + ['description'],
         'data': []}
     tables['reference'] = {
-        'name': 'reference',
-        'header': app.config['TABLE_HEADERS']['reference'] + ['pages'],
+        'id': 'reference', 'header': app.config['TABLE_HEADERS']['reference'] + ['pages'],
         'data': []}
     for link_ in event.get_links('P67', True):
         name = app.config['CODE_CLASS'][link_.domain.class_.code]
@@ -186,7 +182,7 @@ def event_view(id_, unlink_id=None):
             data.append(build_remove_link(unlink_url, link_.domain.name))
         tables[name]['data'].append(data)
     tables['subs'] = {
-        'name': 'sub-event',
+        'id': 'sub-event',
         'header': app.config['TABLE_HEADERS']['event'],
         'data': []}
     for sub_event in event.get_linked_entities('P117', True):
@@ -195,7 +191,7 @@ def event_view(id_, unlink_id=None):
 
 
 def save(form, event=None, code=None, origin=None):
-    openatlas.get_cursor().execute('BEGIN')
+    g.cursor.execute('BEGIN')
     try:
         if event:
             LinkMapper.delete_by_codes(event, ['P117', 'P7', 'P22', 'P23', 'P24'])
@@ -226,9 +222,9 @@ def save(form, event=None, code=None, origin=None):
                 origin.link('P67', event)
             elif origin.class_.code in app.config['CLASS_CODES']['actor']:
                 link_ = event.link('P11', origin)
-        openatlas.get_cursor().execute('COMMIT')
+        g.cursor.execute('COMMIT')
     except Exception as e:  # pragma: no cover
-        openatlas.get_cursor().execute('ROLLBACK')
+        g.cursor.execute('ROLLBACK')
         openatlas.logger.log('error', 'database', 'transaction failed', e)
         flash(_('error transaction'), 'error')
         return

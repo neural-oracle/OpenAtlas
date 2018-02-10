@@ -1,5 +1,5 @@
 # Copyright 2017 by Alexander Watzinger and others. Please see README.md for licensing information
-from flask import render_template, url_for, flash, request
+from flask import render_template, url_for, flash, request, g
 from flask_babel import lazy_gettext as _
 from werkzeug.utils import redirect
 from wtforms import StringField, TextAreaField, HiddenField, SubmitField, FieldList
@@ -58,12 +58,10 @@ def actor_view(id_, unlink_id=None):
     tables = {
         'info': info,
         'source': {
-            'name': 'source',
-            'header': app.config['TABLE_HEADERS']['source'] + ['description'],
+            'id': 'source', 'header': app.config['TABLE_HEADERS']['source'] + ['description'],
             'data': []},
         'reference': {
-            'name': 'reference',
-            'header': app.config['TABLE_HEADERS']['reference'] + ['pages'],
+            'id': 'reference', 'header': app.config['TABLE_HEADERS']['reference'] + ['pages'],
             'data': []}}
     for link_ in actor.get_links('P67', True):
         name = app.config['CODE_CLASS'][link_.domain.class_.code]
@@ -80,8 +78,7 @@ def actor_view(id_, unlink_id=None):
             data.append(build_remove_link(unlink_url, link_.domain.name))
         tables[name]['data'].append(data)
     tables['event'] = {
-        'name': 'event',
-        'header': ['event', 'class', 'involvement', 'first', 'last', 'description'],
+        'id': 'event', 'header': ['event', 'class', 'involvement', 'first', 'last', 'description'],
         'data': []}
     for link_ in actor.get_links(['P11', 'P14', 'P22', 'P23'], True):
         event = link_.domain
@@ -96,7 +93,7 @@ def actor_view(id_, unlink_id=None):
             last = '<span class="inactive" style="float:right">' + str(event.last) + '</span>'
         data = ([
             link(event),
-            openatlas.classes[event.class_.code].name,
+            g.classes[event.class_.code].name,
             link_.type.name if link_.type else '',
             first,
             last,
@@ -108,10 +105,8 @@ def actor_view(id_, unlink_id=None):
             data.append(build_remove_link(unlink_url, link_.range.name))
         tables['event']['data'].append(data)
     tables['relation'] = {
-        'name': 'relation',
-        'sort': 'sortList:[[0,0]]',
-        'header': ['relation', 'actor', 'first', 'last', 'description'],
-        'data': []}
+        'id': 'relation', 'header': ['relation', 'actor', 'first', 'last', 'description'],
+        'sort': 'sortList:[[0,0]]', 'data': []}
     for link_ in actor.get_links('OA7') + actor.get_links('OA7', True):
         if actor.id == link_.domain.id:
             type_ = link_.type.get_name_directed() if link_.type else ''
@@ -132,8 +127,7 @@ def actor_view(id_, unlink_id=None):
             data.append(build_remove_link(unlink_url, related.name))
         tables['relation']['data'].append(data)
     tables['member_of'] = {
-        'name': 'member_of',
-        'header': ['member of', 'function', 'first', 'last', 'description'],
+        'id': 'member_of', 'header': ['member of', 'function', 'first', 'last', 'description'],
         'data': []}
     for link_ in actor.get_links('P107', True):
         data = ([
@@ -150,8 +144,7 @@ def actor_view(id_, unlink_id=None):
         tables['member_of']['data'].append(data)
     if actor.class_.code in app.config['CLASS_CODES']['group']:
         tables['member'] = {
-            'name': 'member',
-            'header': ['member', 'function', 'first', 'last', 'description'],
+            'id': 'member', 'header': ['member', 'function', 'first', 'last', 'description'],
             'data': []}
         for link_ in actor.get_links('P107'):
             data = ([
@@ -176,7 +169,7 @@ def actor_view(id_, unlink_id=None):
 @required_group('readonly')
 def actor_index():
     header = app.config['TABLE_HEADERS']['actor'] + ['description']
-    table = {'name': 'actor', 'header': header, 'data': []}
+    table = {'id': 'actor', 'header': header, 'data': []}
     for actor in EntityMapper.get_by_codes('actor'):
         data = get_base_table_data(actor)
         data.append(truncate_string(actor.description))
@@ -218,14 +211,14 @@ def actor_insert(code, origin_id=None):
 @app.route('/actor/delete/<int:id_>')
 @required_group('editor')
 def actor_delete(id_):
-    openatlas.get_cursor().execute('BEGIN')
+    g.cursor.execute('BEGIN')
     try:
         EntityMapper.delete(id_)
         openatlas.logger.log_user(id_, 'delete')
-        openatlas.get_cursor().execute('COMMIT')
+        g.cursor.execute('COMMIT')
         flash(_('entity deleted'), 'info')
     except Exception as e:  # pragma: no cover
-        openatlas.get_cursor().execute('ROLLBACK')
+        g.cursor.execute('ROLLBACK')
         openatlas.logger.log('error', 'database', 'transaction failed', e)
         flash(_('error transaction'), 'error')
     return redirect(url_for('actor_index'))
@@ -242,7 +235,7 @@ def actor_update(id_):
         if was_modified(form, actor):  # pragma: no cover
             del form.save
             flash(_('error modified'), 'error')
-            modifier = openatlas.logger.get_log_for_advanced_view(actor.id)['modifier_name']
+            modifier = link(openatlas.logger.get_log_for_advanced_view(actor.id)['modifier'])
             return render_template('actor/update.html', form=form, actor=actor, modifier=modifier)
         if save(form, actor):
             flash(_('info update'), 'info')
@@ -260,7 +253,7 @@ def actor_update(id_):
 
 
 def save(form, actor=None, code=None, origin=None):
-    openatlas.get_cursor().execute('BEGIN')
+    g.cursor.execute('BEGIN')
     try:
         if actor:
             LinkMapper.delete_by_codes(actor, ['P74', 'OA8', 'OA9'])
@@ -298,9 +291,9 @@ def save(form, actor=None, code=None, origin=None):
                 link_ = origin.link('P11', actor)
             elif origin_class == 'actor':
                 link_ = origin.link('OA7', actor)
-        openatlas.get_cursor().execute('COMMIT')
+        g.cursor.execute('COMMIT')
     except Exception as e:  # pragma: no cover
-        openatlas.get_cursor().execute('ROLLBACK')
+        g.cursor.execute('ROLLBACK')
         openatlas.logger.log('error', 'database', 'transaction failed', e)
         flash(_('error transaction'), 'error')
         return
