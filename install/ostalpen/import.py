@@ -21,13 +21,9 @@ subprocess.call('psql openatlas_dpp < ../../instance/dpp_origin.sql', shell=True
 
 
 def connect(database_name):
-    try:
-        connection_ = psycopg2.connect(database=database_name, user='openatlas', password=db_pass)
-        connection_.autocommit = True
-        return connection_
-    except Exception as e:  # pragma: no cover
-        print(database_name + " connection error.")
-        raise Exception(e)
+    connection = psycopg2.connect(database=database_name, user='openatlas', password=db_pass)
+    connection.autocommit = True
+    return connection
 
 
 connection_dpp = connect('openatlas_dpp')
@@ -36,16 +32,20 @@ cursor_dpp = connection_dpp.cursor(cursor_factory=psycopg2.extras.NamedTupleCurs
 cursor_ostalpen = connection_ostalpen.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
 
 
-def insert_entity(entity_):
+class Entity:
+    system_type = None
+
+
+def insert_entity(entity):
     sql = """
         INSERT INTO model.entity (name, description, class_code, system_type)
         VALUES (%(name)s, %(description)s, %(class_code)s, %(system_type)s) RETURNING id"""
     cursor_dpp.execute(sql, {
-        'name': entity_['name'],
-        'description': entity_['description'],
-        'class_code': entity_['class_code'],
-        'system_type': entity_['system_type']})
-    entity['id'] = cursor_dpp.fetchone()[0]
+        'name': entity.name,
+        'description': entity.description,
+        'class_code': entity.class_code,
+        'system_type': entity.system_type})
+    entity.id = cursor_dpp.fetchone()[0]
 
 
 entities = []
@@ -65,35 +65,35 @@ sql_ = """
 cursor_ostalpen.execute(sql_)
 
 for row in cursor_ostalpen.fetchall():
-    entities.append({
-        'system_type': None,
-        'old_id': row.uid,
-        'name': row.entity_name_uri,
-        'description': row.entity_description,
-        'class_code': row.cidoc_class_nr})
+    e = Entity()
+    e.old_id = row.uid
+    e.name = row.entity_name_uri
+    e.description = row.entity_description
+    e.class_code = row.cidoc_class_nr
+    entities.append(e)
 
-for entity in entities:
-    if not entity['name']:
+for e in entities:
+    if not e.name:
         continue
-    if entity['class_code'] == 'E021':
-        entity['class_code'] = 'E21'
-        insert_entity(entity)
+    if e.class_code == 'E021':
+        e.class_code = 'E21'
+        insert_entity(e)
         count['E21 Person'] += 1
-    elif entity['class_code'] == 'E033':
-        entity['class_code'] = 'E33'
-        entity['system_type'] = 'source content'
-        insert_entity(entity)
+    elif e.class_code == 'E033':
+        e.class_code = 'E33'
+        e.system_type = 'source content'
+        insert_entity(e)
         count['E33 Document'] += 1
-    elif entity['class_code'] == 'E074':
-        entity['class_code'] = 'E74'
-        insert_entity(entity)
+    elif e.class_code == 'E074':
+        e.class_code = 'E74'
+        insert_entity(e)
         count['E74 Group'] += 1
-    elif entity['class_code'] == 'E008':
-        entity['class_code'] = 'E8'
-        insert_entity(entity)
+    elif e.class_code == 'E008':
+        e.class_code = 'E8'
+        insert_entity(e)
         count['E8 Acquisition'] += 1
     else:
-        missing_classes[entity['class_code']] = entity['class_code']
+        missing_classes[e.class_code] = e.class_code
 
 for name, count in count.items():
     print('New ' + name + ': ' + str(count))
