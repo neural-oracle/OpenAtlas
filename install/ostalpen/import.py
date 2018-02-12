@@ -5,10 +5,11 @@ import psycopg2.extras
 
 """
 To do:
-- create a field and save old id
-- keep insert timestamp
-- track user_id
-- add case study type
+- user_id, will be Ostalpen user id
+- add type case study - eastern alps
+
+After gis implementation:
+- split case studies
 """
 
 start = time.time()
@@ -38,15 +39,25 @@ class Entity:
 
 def insert_entity(entity):
     sql = """
-        INSERT INTO model.entity (name, description, class_code, system_type)
-        VALUES (%(name)s, %(description)s, %(class_code)s, %(system_type)s) RETURNING id"""
+        INSERT INTO model.entity (name, description, class_code, system_type, ostalpen_id, created)
+        VALUES (%(name)s, %(description)s, %(class_code)s, %(system_type)s, %(ostalpen_id)s,
+            %(created)s)
+        RETURNING id"""
     cursor_dpp.execute(sql, {
         'name': entity.name,
+        'ostalpen_id': entity.ostalpen_id,
         'description': entity.description,
         'class_code': entity.class_code,
+        'created': entity.created,
         'system_type': entity.system_type})
     entity.id = cursor_dpp.fetchone()[0]
 
+
+sql = """
+    ALTER TABLE model.entity ADD COLUMN ostalpen_id integer;
+    COMMENT ON COLUMN model.entity.ostalpen_id IS 'uid of former Ostalpen table tbl_entities';"""
+
+cursor_dpp.execute(sql)
 
 entities = []
 missing_classes = {}
@@ -59,14 +70,15 @@ count = {
 sql_ = """
     SELECT
         uid, entity_name_uri, cidoc_class_nr, entity_type, entity_description, start_time_abs,
-        end_time_abs, start_time_text, end_time_text
+        end_time_abs, start_time_text, end_time_text, timestamp_creation
     FROM openatlas.tbl_entities e
     JOIN openatlas.tbl_classes c ON e.classes_uid = c.tbl_classes_uid;"""
 cursor_ostalpen.execute(sql_)
 
 for row in cursor_ostalpen.fetchall():
     e = Entity()
-    e.old_id = row.uid
+    e.created = row.timestamp_creation
+    e.ostalpen_id = row.uid
     e.name = row.entity_name_uri
     e.description = row.entity_description
     e.class_code = row.cidoc_class_nr
