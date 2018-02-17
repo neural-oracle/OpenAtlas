@@ -1,3 +1,7 @@
+## Run script after preparations below
+
+python3 install/ostalpen/import.py
+
 ## Create DPP database from PHP version dump
 
 ### Search and replace
