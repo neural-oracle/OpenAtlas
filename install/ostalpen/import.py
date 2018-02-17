@@ -5,7 +5,6 @@ import psycopg2.extras
 
 """
 To do:
-- user_id, will be Ostalpen user id
 - add type case study - eastern alps
 
 After gis implementation:
@@ -14,6 +13,9 @@ After gis implementation:
 
 start = time.time()
 db_pass = open('../../instance/password.txt').read().splitlines()[0]
+
+ostalpen_user_id = 38
+ostalpen_type_id = 11821
 
 # make a fresh database
 subprocess.call('dropdb openatlas_dpp', shell=True)
@@ -51,13 +53,17 @@ def insert_entity(entity):
         'created': entity.created,
         'system_type': entity.system_type})
     entity.id = cursor_dpp.fetchone()[0]
+    sql = """
+        INSERT INTO web.user_log (user_id, action, entity_id, created)
+        VALUES (38, 'insert', %(entity_id)s, %(created)s);"""
+    cursor_dpp.execute(sql, {'entity_id': entity.id, 'created': entity.created})
 
 
-sql = """
+sql_ = """
     ALTER TABLE model.entity ADD COLUMN ostalpen_id integer;
     COMMENT ON COLUMN model.entity.ostalpen_id IS 'uid of former Ostalpen table tbl_entities';"""
 
-cursor_dpp.execute(sql)
+cursor_dpp.execute(sql_)
 
 entities = []
 missing_classes = {}

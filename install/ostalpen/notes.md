@@ -12,10 +12,16 @@
 
 ### Execute upgrades
 
-    cd install/upgrade/
-    psql openatlas_dpp_origin < 3.0.0.sql
-    psql openatlas_dpp_origin < 3.2.0.sql
+    psql install/upgrade/openatlas_dpp_origin < 3.0.0.sql
+    psql install/upgrade/openatlas_dpp_origin < 3.2.0.sql
 
+### Change passwords
+
+The new version needs new passwords for user
+
+### Make a new SQL dump
+
+    pg_dump openatlas_dpp_origin > instance/dpp_origin.sql
 
 ## Create Ostalpen database from original dump
 
