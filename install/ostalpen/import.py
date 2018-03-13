@@ -6,16 +6,15 @@ import psycopg2.extras
 """
 To do:
 
+- remove hardcoded ids for types eg: 37 with type id from "Original text"
 - add type case study - eastern alps
-
-- original translation: add type
-- implement a 'normal' translation
-- count skipped translation links
-- count skipped links
-- add documented in
+- add source links to actors, places, ... (add documented in)
 
 After gis implementation:
 - split case studies
+
+At the end:
+- compare links created with links existing
 """
 
 start = time.time()
@@ -46,7 +45,7 @@ class Entity:
     system_type = None
 
 
-def link(property_code, domain_id, range_id, description):
+def link(property_code, domain_id, range_id, description=None):
     sql = """
         INSERT INTO model.link (property_code, domain_id, range_id, description)
         VALUES (
@@ -166,7 +165,14 @@ for row in cursor_ostalpen.fetchall():
         range_ = new_entities[row.links_entity_uid_to]
         if domain.id_name.startswith('tbl_2_quelle_original'):
             link('P73', range_.id, domain.id, row.links_annotation)
-
+            link('P2', domain.id, 37)
+            count['link'] += 2
+        elif domain.id_name.startswith('tbl_2_quelle_uebersetzung'):
+            link('P73', range_.id, domain.id, row.links_annotation)
+            link('P2', domain.id, 38)
+            count['link'] += 2
+        else:
+            print('Error missing translation type, id: ' + str(domain.id) + ', ' + domain.id_name)
 
 for name, count in count.items():
     print(name + ': ' + str(count))
