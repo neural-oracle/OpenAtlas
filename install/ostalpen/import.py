@@ -9,6 +9,7 @@ To do:
 - remove hardcoded ids for types eg: 37 with type id from "Original text"
 - add type case study - eastern alps
 - add source links to actors, places, ... (add documented in)
+- check if sources have dates
 
 After gis implementation:
 - split case studies
