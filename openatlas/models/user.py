@@ -1,9 +1,9 @@
 # Created 2017 by Alexander Watzinger and others. Please see README.md for licensing information
+import datetime
 import random
 import string
 
 import bcrypt
-import datetime
 from flask import g, session
 from flask_babel import lazy_gettext as _
 from flask_login import UserMixin

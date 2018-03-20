@@ -9,6 +9,7 @@ from werkzeug.exceptions import abort
 from openatlas import app, debug_model, logger
 from openatlas.models.date import DateMapper
 from openatlas.models.link import LinkMapper
+from openatlas.util.util import get_view_name
 
 
 class Entity:
@@ -67,13 +68,14 @@ class Entity:
 
     def print_base_type(self):
         from openatlas.models.node import NodeMapper
-        if self.class_.code not in app.config['CODE_CLASS']:
+        view_name = get_view_name(self)
+        if not view_name or view_name == 'actor':  # actors have no base type
             return ''
-        if self.class_.code in app.config['CLASS_CODES']['actor']:
-            return ''  # actors have no base type
-        root_name = app.config['CODE_CLASS'][self.class_.code].title()
-        if self.class_.code in app.config['CLASS_CODES']['reference']:
+        root_name = view_name.title()
+        if view_name == 'reference':
             root_name = self.system_type.title()
+        elif view_name == 'file':
+            root_name = 'License'
         root_id = NodeMapper.get_hierarchy_by_name(root_name).id
         for node in self.nodes:
             if node.root and node.root[-1] == root_id:
@@ -81,7 +83,7 @@ class Entity:
         return ''
 
     def get_name_directed(self, inverse=False):
-        """ Returns name part of a directed type e.g. Actor Actor Relation: Parent of (Child of)"""
+        """Returns name part of a directed type e.g. Actor Actor Relation: Parent of (Child of)"""
         from openatlas.util.util import sanitize
         name_parts = self.name.split(' (')
         if inverse and len(name_parts) > 1:
@@ -90,8 +92,6 @@ class Entity:
 
 
 class EntityMapper:
-    # Todo: performance - refactor sub selects, get_by_class
-    # Todo: performance - use first and last only for get_by_codes?
     sql = """
         SELECT
             e.id, e.class_code, e.name, e.description, e.created, e.modified,
@@ -131,6 +131,16 @@ class EntityMapper:
             'id': entity.id,
             'name': entity.name,
             'description': sanitize(entity.description, 'description')})
+
+    @staticmethod
+    def get_by_system_type(system_type):
+        sql = EntityMapper.sql
+        sql += ' WHERE e.system_type = %(system_type)s GROUP BY e.id ORDER BY e.name;'
+        g.cursor.execute(sql, {'system_type': system_type})
+        entities = []
+        for row in g.cursor.fetchall():
+            entities.append(Entity(row))
+        return entities
 
     @staticmethod
     def insert(code, name, system_type=None, description=None, date=None):
@@ -175,7 +185,11 @@ class EntityMapper:
     def get_by_codes(class_name):
         if class_name == 'source':
             sql = EntityMapper.sql + """
-                WHERE e.class_code IN %(codes)s AND e.system_type ='source content'
+                WHERE e.class_code IN %(codes)s AND e.system_type = 'source content'
+                GROUP BY e.id ORDER BY e.name;"""
+        elif class_name == 'reference':
+            sql = EntityMapper.sql + """
+                WHERE e.class_code IN %(codes)s AND e.system_type != 'file'
                 GROUP BY e.id ORDER BY e.name;"""
         else:
             sql = EntityMapper.sql + """
@@ -189,7 +203,7 @@ class EntityMapper:
 
     @staticmethod
     def delete(entity):
-        """ Triggers function model.delete_entity_related() for deleting related entities"""
+        """Triggers function model.delete_entity_related() for deleting related entities"""
         entity_id = entity if isinstance(entity, int) else entity.id
         sql = "DELETE FROM model.entity WHERE id = %(entity_id)s;"
         g.cursor.execute(sql, {'entity_id': entity_id})
@@ -207,14 +221,14 @@ class EntityMapper:
             FROM model.entity;"""
         g.cursor.execute(sql)
         row = g.cursor.fetchone()
-        counts = OrderedDict()  # Todo: one liner to get a dict of record?
+        counts = OrderedDict()
         for idx, col in enumerate(g.cursor.description):
             counts[col[0]] = row[idx]
         return counts
 
     @staticmethod
     def get_page_ids(entity, codes):
-        """ Return ids for pager (first, previous, next, last)"""
+        """Return ids for pager (first, previous, next, last)"""
         sql_where = " e.class_code IN ('{codes}')".format(codes="','".join(codes)) + " AND "
         sql_where += "e.system_type='source content'" if 'E33' in codes else "e.system_type IS NULL"
         sql_prev = "SELECT max(e.id) AS id FROM model.entity e WHERE e.id < %(id)s AND " + sql_where
@@ -229,7 +243,7 @@ class EntityMapper:
 
     @staticmethod
     def get_orphans():
-        """ Returns entities without links. """
+        """Returns entities without links. """
         entities = []
         g.cursor.execute(EntityMapper.sql_orphan)
         debug_model['div sql'] += 1
@@ -239,9 +253,9 @@ class EntityMapper:
 
     @staticmethod
     def get_latest(limit):
-        """ Returns the newest created entities"""
+        """Returns the newest created entities"""
         codes = []
-        for class_, class_codes in app.config['CLASS_CODES'].items():
+        for class_codes in app.config['CLASS_CODES'].values():
             codes += class_codes
         sql = EntityMapper.sql + """
                 WHERE e.class_code IN %(codes)s

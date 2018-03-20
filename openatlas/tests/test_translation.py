@@ -8,8 +8,8 @@ from openatlas.test_base import TestBaseCase
 class TranslationTest(TestBaseCase):
 
     def test_source(self):
-        self.login()
         with app.app_context():
+            self.login()
             with app.test_request_context():
                 app.preprocess_request()
                 source_id = EntityMapper.insert('E33', 'Necronomicon', 'source content').id

@@ -1,8 +1,9 @@
+import os
 from collections import OrderedDict
 
 from flask_babel import lazy_gettext as _
 
-VERSION = '3.2.1'
+VERSION = '3.3.0'
 DEBUG = False
 DEMO_MODE = False  # If in demo mode some options are disabled and the login form is pre filled
 
@@ -17,6 +18,8 @@ DATABASE_PORT = 5432
 DATABASE_PASS = 'CHANGE ME'
 MAIL_PASSWORD = 'CHANGE ME'
 SECRET_KEY = 'CHANGE ME'
+
+UPLOAD_FOLDER_PATH = os.path.dirname(__file__) + '/../openatlas/uploads'
 
 # Whitelisted domains are ignored by the link checker
 WHITELISTED_DOMAINS = ['E61']
@@ -65,11 +68,12 @@ CLASS_CODES = {
 
 # Default table columns based on class
 TABLE_HEADERS = {
-    'source': ['name', 'type'],
+    'source': ['name', 'type', 'description'],
     'event': ['name', 'class', 'type', 'first', 'last'],
     'actor': ['name', 'class', 'first', 'last'],
     'group': ['name', 'class', 'first', 'last'],
     'place': ['name', 'type', 'first', 'last'],
-    'reference': ['name', 'class', 'type']}
+    'reference': ['name', 'class', 'type'],
+    'file': ['name', 'license', 'size', 'extension', 'description']}
 
 BASE_TYPES = ['Place', 'Information Carrier', 'Bibliography', 'Source', 'Edition', 'Event', 'Actor']

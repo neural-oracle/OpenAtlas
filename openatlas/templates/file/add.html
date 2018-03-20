@@ -1,9 +1,9 @@
-{% extends 'layout.html' %}
+{% extends "layout.html" %}
 {% block breadcrumb %}
     <a href="{{ origin|get_view_name + '_index' }}">{{ _(origin|get_view_name)|uc_first }}</a>
     > {{ origin|link|safe }}
-    > + {{ _('involvement')|uc_first }}
+    > {{ _('add')|uc_first + ' ' + _('file')|uc_first }}
 {% endblock %}
 {% block content %}
-    {{ form|display_form|safe }}
+    {{ form|safe }}
 {% endblock %}

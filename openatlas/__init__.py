@@ -39,7 +39,7 @@ logger = DBHandler()
 from openatlas.util import filters
 from openatlas.views import (actor, admin, ajax, content, event, hierarchy, index, login, types,
                              model, place, profile, reference, settings, source, translation, user,
-                             involvement, relation, member, search)
+                             involvement, relation, member, search, file)
 
 
 @babel.localeselector
@@ -82,6 +82,8 @@ def before_request():
     g.nodes = NodeMapper.get_all_nodes()
     session['settings'] = SettingsMapper.get_settings()
     session['language'] = get_locale()
+    # Set max file upload in MB
+    app.config['MAX_CONTENT_LENGTH'] = session['settings']['file_upload_max_size'] * 1024 * 1024
     debug_model['by codes'] = 0
     debug_model['by id'] = 0
     debug_model['by ids'] = 0

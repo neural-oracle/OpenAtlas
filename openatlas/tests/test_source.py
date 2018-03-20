@@ -9,8 +9,8 @@ from openatlas.test_base import TestBaseCase
 class SourceTest(TestBaseCase):
 
     def test_source(self):
-        self.login()
         with app.app_context():
+            self.login()
 
             # source insert
             rv = self.app.get(url_for('source_insert'))
@@ -55,8 +55,7 @@ class SourceTest(TestBaseCase):
                 url_for('source_add2', origin_id=actor_id, id_=source_id, class_name='actor'))
             rv = self.app.post(
                 url_for('source_add2', id_=source_id, class_name='actor'),
-                data={'values': actor_id},
-                follow_redirects=True)
+                data={'values': actor_id}, follow_redirects=True)
             assert b'Tha Ref' in rv.data
             rv = self.app.get(url_for('source_view', id_=source_id))
             assert b'Tha Ref' in rv.data

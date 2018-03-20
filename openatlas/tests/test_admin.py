@@ -8,8 +8,8 @@ from openatlas.test_base import TestBaseCase
 class ContentTests(TestBaseCase):
 
     def test_content_and_newsletter(self):
-        self.login()
         with app.app_context():
+            self.login()
             self.app.post(url_for('actor_insert', code='E21'), data={'name': 'Oliver Twist'})
             with app.test_request_context():
                 app.preprocess_request()
@@ -19,6 +19,9 @@ class ContentTests(TestBaseCase):
             assert b'2017-04-01' in rv.data
             rv = self.app.get(url_for('admin_orphans', delete='orphans'))
             assert b'2017-04-01' not in rv.data
+            self.app.get(url_for('admin_orphans', delete='unlinked'))
+            self.app.get(url_for('admin_orphans', delete='types'))
+            self.app.get(url_for('admin_orphans', delete='something completely different'))
             rv = self.app.get(url_for('admin_newsletter'))
             assert b'Newsletter' in rv.data
 
