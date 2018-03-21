@@ -6,10 +6,11 @@ import psycopg2.extras
 """
 To do:
 
+- add 3.3.0 update sql to orig db
 - remove hardcoded ids for types eg: 37 with type id from "Original text"
 - add type case study - eastern alps
 - add source links to actors, places, ... (add documented in)
-- check if sources have dates
+
 
 After gis implementation:
 - split case studies
@@ -70,10 +71,22 @@ def insert_entity(entity):
         VALUES (%(name)s, %(description)s, %(class_code)s, %(system_type)s, %(ostalpen_id)s,
             %(created)s)
         RETURNING id"""
+    description = entity.description
+    dates_comment = None
+    if e.class_code == 'E33':
+        if e.start_time_text:
+            dates_comment = e.start_time_text
+        if e.start_time_abs:
+            dates_comment += ' ' + str(e.start_time_abs)
+        if description and dates_comment:
+            description = dates_comment + ': ' + description
+        elif dates_comment:
+            description = dates_comment
+
     cursor_dpp.execute(sql, {
         'name': entity.name,
         'ostalpen_id': entity.ostalpen_id,
-        'description': entity.description,
+        'description': description,
         'class_code': entity.class_code,
         'created': entity.created,
         'system_type': entity.system_type})
@@ -117,6 +130,8 @@ for row in cursor_ostalpen.fetchall():
     e.name = row.entity_name_uri
     e.description = row.entity_description
     e.class_code = row.cidoc_class_nr
+    e.start_time_text = row.start_time_text
+    e.start_time_abs = row.start_time_abs
     entities.append(e)
 
 for e in entities:
