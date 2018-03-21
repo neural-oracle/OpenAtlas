@@ -1,8 +1,14 @@
 ## INFO
 
-Before executing SQL statements make a backup of the database.
+Before executing SQL statements backup the database. Replace database role "openatlas" if needed.
 
-Replace database role "openatlas" if needed.
+### 3.2.x to 3.3.0
+
+Execute install/upgrade/3.3.0.sql after making backups
+
+Make the openatlas/uploads directory writeable for apache e.g.
+
+    chown www-data /var/www/net/openatlas/openatlas/uploads/
 
 ### 3.1.0 to 3.2.0
 

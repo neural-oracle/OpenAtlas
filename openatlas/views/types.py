@@ -44,7 +44,7 @@ def node_insert(root_id):
         name = form.name.data
         if hasattr(form, 'name_inverse') in form:
             name += ' (' + form.name_inverse.data + ')'
-        node = save(form, None, root)
+        node = save(form, root=root)
         if node:
             flash(_('entity created'), 'info')
             return redirect(url_for('node_view', id_=node.id))
@@ -66,6 +66,7 @@ def node_update(id_):
             flash(_('info update'), 'info')
             return redirect(url_for('node_view', id_=id_))
         return render_template('types/update.html', node=node, root=root, form=form)
+    getattr(form, str(root.id)).label.text = 'super'
     return render_template('types/update.html', node=node, root=root, form=form)
 
 

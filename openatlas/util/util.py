@@ -1,7 +1,10 @@
 # Created 2017 by Alexander Watzinger and others. Please see README.md for licensing information
+import glob
+import os
 import re
 import smtplib
 from collections import OrderedDict
+from datetime import datetime
 from email.header import Header
 from email.mime.text import MIMEText
 from functools import wraps
@@ -9,19 +12,44 @@ from html.parser import HTMLParser
 
 import numpy
 from babel import dates
-from datetime import datetime
 from flask import abort, flash, g, request, session, url_for
 from flask_babel import lazy_gettext as _
 from flask_login import current_user
+from numpy import math
 from werkzeug.utils import redirect
 
 import openatlas
 from openatlas import app
 from openatlas.models.classObject import ClassObject
 from openatlas.models.date import DateMapper
-from openatlas.models.entity import Entity
 from openatlas.models.property import Property
 from openatlas.models.user import User
+
+
+def convert_size(size_bytes):
+    if size_bytes == 0:
+        return "0B"  # pragma: no cover
+    size_name = ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
+    i = int(math.floor(math.log(size_bytes, 1024)))
+    return "%s %s" % (int(size_bytes / math.pow(1024, i)), size_name[i])
+
+
+def get_file_path(entity):
+    entity_id = entity if isinstance(entity, int) else entity.id
+    path = glob.glob(os.path.join(app.config['UPLOAD_FOLDER_PATH'], str(entity_id) + '.*'))
+    return path[0] if path else None
+
+
+def print_file_size(entity):
+    entity_id = entity if isinstance(entity, int) else entity.id
+    path = get_file_path(entity_id)
+    return convert_size(os.path.getsize(path)) if path else 'N/A'
+
+
+def print_file_extension(entity):
+    entity_id = entity if isinstance(entity, int) else entity.id
+    path = get_file_path(entity_id)
+    return os.path.splitext(path)[1] if path else 'N/A'
 
 
 def send_mail(subject, text, recipients, log_body=True):  # pragma: no cover
@@ -79,6 +107,13 @@ class MLStripper(HTMLParser):
         return ''.join(self.fed)
 
 
+def get_view_name(entity):
+    if entity.system_type == 'file':
+        return 'file'
+    if entity.class_.code in app.config['CODE_CLASS']:
+        return app.config['CODE_CLASS'][entity.class_.code]
+
+
 def sanitize(string, mode=None):
     if not mode:
         """Remove all characters from a string except ASCII letters and numbers"""
@@ -93,14 +128,18 @@ def sanitize(string, mode=None):
 
 
 def build_table_form(class_name, linked_entities):
-    """ Returns a form with a list of entities with checkboxes"""
+    """Returns a form with a list of entities with checkboxes"""
     from openatlas.models.entity import EntityMapper
     # Todo: add CSRF token
     form = '<form class="table" method="post">'
     header = app.config['TABLE_HEADERS'][class_name] + ['']
     table = {'id': class_name, 'header': header, 'data': []}
     linked_ids = [entity.id for entity in linked_entities]
-    for entity in EntityMapper.get_by_codes(class_name):
+    if class_name == 'file':
+        entities = EntityMapper.get_by_system_type('file')
+    else:
+        entities = EntityMapper.get_by_codes(class_name)
+    for entity in entities:
         if entity.id in linked_ids:
             continue  # don't show already linked entries
         input_ = '<input id="{id}" name="values" type="checkbox" value="{id}">'.format(id=entity.id)
@@ -113,8 +152,8 @@ def build_table_form(class_name, linked_entities):
     return form
 
 
-def build_remove_link(url, name):
-    """ Build a link to remove a link with a JavaScript confirmation dialog"""
+def display_remove_link(url, name):
+    """Build a link to remove a link with a JavaScript confirmation dialog"""
     name = name.replace('\'', '')
     confirm = 'onclick="return confirm(\'' + _('Remove %(name)s?', name=name) + '\')"'
     return '<a ' + confirm + ' href="' + url + '">' + uc_first(_('remove')) + '</a>'
@@ -148,6 +187,11 @@ def get_entity_data(entity, location=None):
         aliases = entity.get_linked_entities('P1')
         if aliases:
             data.append((uc_first(_('alias')), '<br />'.join([x.name for x in aliases])))
+
+    # Info for files
+    if entity.system_type == 'file':
+        data.append((uc_first(_('size')), print_file_size(entity)))
+        data.append((uc_first(_('extension')), print_file_extension(entity)))
 
     # Info for events
     if entity.class_.code in app.config['CLASS_CODES']['event']:
@@ -335,6 +379,7 @@ def format_date(value, format_='medium'):
 
 
 def link(entity):
+    from openatlas.models.entity import Entity
     if not entity:
         return ''
     html = ''
@@ -355,6 +400,8 @@ def link(entity):
                 url = url_for('source_view', id_=entity.id)
             elif entity.system_type == 'source translation':
                 url = url_for('translation_view', id_=entity.id)
+        elif entity.system_type == 'file':
+            url = url_for('file_view', id_=entity.id)
         elif entity.class_.code in ('E7', 'E8', 'E12', 'E6'):
             url = url_for('event_view', id_=entity.id)
         elif entity.class_.code in ('E21', 'E74', 'E40'):
@@ -396,7 +443,7 @@ def pager(table):
     table_rows = session['settings']['default_table_rows']
     if hasattr(current_user, 'settings'):
         table_rows = current_user.settings['table_rows']
-    show_pager = False if len(table['data']) < table_rows else True
+    show_pager = table['show_pager'] if 'show_pager' in table else True
     if show_pager:
         options = ''
         for amount in app.config['DEFAULT_TABLE_ROWS']:
@@ -420,7 +467,7 @@ def pager(table):
     for header in table['header']:
         style = '' if header else 'class=sorter-false '  # only show and sort headers with a title
         html += '<th ' + style + '>' + (_(header).capitalize() if header else '') + '</th>'
-    # append missing headers
+    # Append missing headers
     html += '<th class=sorter-false></th>' * (len(table['data'][0]) - len(table['header']))
     html += '</tr></thead><tbody>'
     for row in table['data']:
@@ -452,26 +499,40 @@ def pager(table):
             id=table['id'],
             sort=sort,
             size=table_rows,
-            headers='' if 'headers' not in table else table['headers'] + ',')
+            headers=(table['headers'] + ',') if 'headers' in table else '')
     else:
-        html += '$("#' + table['id'] + '-table").tablesorter({' + sort + 'widgets:[\'zebra\']});'
+        html += """
+            $("#{id}-table").tablesorter({{
+                {sort}
+                widgets: [\'zebra\', \'filter\'],
+                widgetOptions: {{
+                    filter_external: \'#{id}-search\',
+                    filter_columnFilters: false
+                }}}});
+        """.format(id=table['id'], sort=sort, )
     html += '</script>'
     return html
 
 
 def get_base_table_data(entity):
     """Returns standard table data for an entity"""
-    name = app.config['CODE_CLASS'][entity.class_.code]
-    data = [link(entity)]
-    if name in ['event', 'actor']:
+    data = []
+    view_name = get_view_name(entity)
+    data.append(link(entity))
+    if view_name in ['event', 'actor']:
         data.append(g.classes[entity.class_.code].name)
-    if name in ['reference']:
+    if view_name in ['reference'] and entity.system_type != 'file':
         data.append(uc_first(_(entity.system_type)))
-    if name in ['event', 'place', 'source', 'reference']:
+    if view_name in ['event', 'place', 'source', 'reference', 'file']:
         data.append(entity.print_base_type())
-    if name in ['event', 'actor', 'place']:
+    if entity.system_type == 'file':
+        data.append(print_file_size(entity))
+        data.append(print_file_extension(entity))
+    if view_name in ['event', 'actor', 'place']:
         data.append(format(entity.first))
         data.append(format(entity.last))
+    if view_name in ['source'] or entity.system_type == 'file':
+        data.append(truncate_string(entity.description))
     return data
 
 

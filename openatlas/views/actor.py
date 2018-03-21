@@ -9,10 +9,10 @@ from openatlas import app, logger
 from openatlas.forms.forms import DateForm, TableField, build_form
 from openatlas.models.entity import EntityMapper
 from openatlas.models.gis import GisMapper
-from openatlas.models.link import Link, LinkMapper
-from openatlas.util.util import (build_remove_link, get_base_table_data, get_entity_data,
-                                 is_authorized, link, required_group, truncate_string, uc_first,
-                                 was_modified)
+from openatlas.models.link import LinkMapper
+from openatlas.util.util import (display_remove_link, get_base_table_data, get_entity_data,
+                                 get_view_name, is_authorized, link, required_group,
+                                 truncate_string, uc_first, was_modified)
 
 
 class ActorForm(DateForm):
@@ -56,29 +56,32 @@ def actor_view(id_, unlink_id=None):
         info.append((uc_first(_('appears last')), link(object_)))
     tables = {
         'info': info,
-        'source': {
-            'id': 'source', 'header': app.config['TABLE_HEADERS']['source'] + ['description'],
-            'data': []},
+        'file': {'id': 'files', 'data': [], 'header': app.config['TABLE_HEADERS']['file']},
+        'source': {'id': 'source', 'data': [], 'header': app.config['TABLE_HEADERS']['source']},
         'reference': {
-            'id': 'reference', 'header': app.config['TABLE_HEADERS']['reference'] + ['pages'],
-            'data': []}}
+            'id': 'reference', 'data': [],
+            'header': app.config['TABLE_HEADERS']['reference'] + ['pages']},
+        'event': {
+            'id': 'event', 'data': [],
+            'header': ['event', 'class', 'involvement', 'first', 'last', 'description']},
+        'relation': {
+            'id': 'relation', 'data': [], 'sort': 'sortList:[[0,0]]',
+            'header': ['relation', 'actor', 'first', 'last', 'description']},
+        'member_of': {
+            'id': 'member_of', 'data': [],
+            'header': ['member of', 'function', 'first', 'last', 'description']}}
     for link_ in actor.get_links('P67', True):
-        name = app.config['CODE_CLASS'][link_.domain.class_.code]
         data = get_base_table_data(link_.domain)
-        if name == 'source':
-            data.append(truncate_string(link_.domain.description))
-        else:
+        view_name = get_view_name(link_.domain)
+        if view_name not in ['source', 'file']:
             data.append(truncate_string(link_.description))
             if is_authorized('editor'):
                 update_url = url_for('reference_link_update', link_id=link_.id, origin_id=actor.id)
                 data.append('<a href="' + update_url + '">' + uc_first(_('edit')) + '</a>')
         if is_authorized('editor'):
-            unlink_url = url_for('actor_view', id_=actor.id, unlink_id=link_.id) + '#tab' + name
-            data.append(build_remove_link(unlink_url, link_.domain.name))
-        tables[name]['data'].append(data)
-    tables['event'] = {
-        'id': 'event', 'header': ['event', 'class', 'involvement', 'first', 'last', 'description'],
-        'data': []}
+            unlink = url_for('actor_view', id_=actor.id, unlink_id=link_.id) + '#tab-' + view_name
+            data.append(display_remove_link(unlink, link_.domain.name))
+        tables[view_name]['data'].append(data)
     for link_ in actor.get_links(['P11', 'P14', 'P22', 'P23'], True):
         event = link_.domain
         first = link_.first
@@ -101,11 +104,8 @@ def actor_view(id_, unlink_id=None):
             update_url = url_for('involvement_update', id_=link_.id, origin_id=actor.id)
             unlink_url = url_for('actor_view', id_=actor.id, unlink_id=link_.id) + '#tab-event'
             data.append('<a href="' + update_url + '">' + uc_first(_('edit')) + '</a>')
-            data.append(build_remove_link(unlink_url, link_.range.name))
+            data.append(display_remove_link(unlink_url, link_.range.name))
         tables['event']['data'].append(data)
-    tables['relation'] = {
-        'id': 'relation', 'header': ['relation', 'actor', 'first', 'last', 'description'],
-        'sort': 'sortList:[[0,0]]', 'data': []}
     for link_ in actor.get_links('OA7') + actor.get_links('OA7', True):
         if actor.id == link_.domain.id:
             type_ = link_.type.get_name_directed() if link_.type else ''
@@ -123,11 +123,8 @@ def actor_view(id_, unlink_id=None):
             update_url = url_for('relation_update', id_=link_.id, origin_id=actor.id)
             unlink_url = url_for('actor_view', id_=actor.id, unlink_id=link_.id) + '#tab-relation'
             data.append('<a href="' + update_url + '">' + uc_first(_('edit')) + '</a>')
-            data.append(build_remove_link(unlink_url, related.name))
+            data.append(display_remove_link(unlink_url, related.name))
         tables['relation']['data'].append(data)
-    tables['member_of'] = {
-        'id': 'member_of', 'header': ['member of', 'function', 'first', 'last', 'description'],
-        'data': []}
     for link_ in actor.get_links('P107', True):
         data = ([
             link(link_.domain),
@@ -139,7 +136,7 @@ def actor_view(id_, unlink_id=None):
             update_url = url_for('member_update', id_=link_.id, origin_id=actor.id)
             unlink_url = url_for('actor_view', id_=actor.id, unlink_id=link_.id) + '#tab-member-of'
             data.append('<a href="' + update_url + '">' + uc_first(_('edit')) + '</a>')
-            data.append(build_remove_link(unlink_url, link_.domain.name))
+            data.append(display_remove_link(unlink_url, link_.domain.name))
         tables['member_of']['data'].append(data)
     if actor.class_.code in app.config['CLASS_CODES']['group']:
         tables['member'] = {
@@ -156,7 +153,7 @@ def actor_view(id_, unlink_id=None):
                 update_url = url_for('member_update', id_=link_.id, origin_id=actor.id)
                 unlink_url = url_for('actor_view', id_=actor.id, unlink_id=link_.id) + '#tab-member'
                 data.append('<a href="' + update_url + '">' + uc_first(_('edit')) + '</a>')
-                data.append(build_remove_link(unlink_url, link_.range.name))
+                data.append(display_remove_link(unlink_url, link_.range.name))
             tables['member']['data'].append(data)
     gis_data = GisMapper.get_all(object_ids) if object_ids else None
     if gis_data and gis_data['gisPointSelected'] == '[]':
@@ -184,23 +181,7 @@ def actor_insert(code, origin_id=None):
     code_class = {'E21': 'Person', 'E74': 'Group', 'E40': 'Legal Body'}
     form = build_form(ActorForm, code_class[code])
     if form.validate_on_submit():
-        result = save(form, None, code, origin)
-        if not result:  # pragma: no cover
-            return render_template('actor/insert.html', form=form, code=code, origin=origin)
-        flash(_('entity created'), 'info')
-        if isinstance(result, Link) and result.property_code == 'P67':
-            return redirect(url_for('reference_link_update', link_id=result, origin_id=origin_id))
-        if form.continue_.data == 'yes':
-            return redirect(url_for('actor_insert', code=code, origin_id=origin_id))
-        if origin:
-            origin_class = app.config['CODE_CLASS'][origin.class_.code]
-            if origin_class == 'event':
-                return redirect(url_for('involvement_update', id_=result, origin_id=origin_id))
-            if origin_class == 'actor':
-                return redirect(url_for('relation_update', id_=result, origin_id=origin_id))
-            view = app.config['CODE_CLASS'][origin.class_.code]
-            return redirect(url_for(view + '_view', id_=origin.id) + '#tab-actor')
-        return redirect(url_for('actor_view', id_=result.id))
+        return redirect(save(form, code=code, origin=origin))
     form.alias.append_entry('')
     if origin:
         del form.insert_and_continue
@@ -236,8 +217,7 @@ def actor_update(id_):
             flash(_('error modified'), 'error')
             modifier = link(logger.get_log_for_advanced_view(actor.id)['modifier'])
             return render_template('actor/update.html', form=form, actor=actor, modifier=modifier)
-        if save(form, actor):
-            flash(_('info update'), 'info')
+        save(form, actor)
         return redirect(url_for('actor_view', id_=id_))
     residence = actor.get_linked_entity('P74')
     form.residence.data = residence.get_linked_entity('P53', True).id if residence else ''
@@ -254,19 +234,20 @@ def actor_update(id_):
 def save(form, actor=None, code=None, origin=None):
     g.cursor.execute('BEGIN')
     try:
+        log_action = 'update'
         if actor:
             LinkMapper.delete_by_codes(actor, ['P74', 'OA8', 'OA9'])
             for alias in actor.get_linked_entities('P131'):
                 alias.delete()
-            logger.log_user(actor.id, 'update')
         else:
             actor = EntityMapper.insert(code, form.name.data)
-            logger.log_user(actor.id, 'insert')
+            log_action = 'insert'
         actor.name = form.name.data
         actor.description = form.description.data
         actor.update()
         actor.save_dates(form)
         actor.save_nodes(form)
+        url = url_for('actor_view', id_=actor.id)
         if form.residence.data:
             object_ = EntityMapper.get_by_id(form.residence.data)
             actor.link('P74', object_.get_linked_entity('P53'))
@@ -279,21 +260,28 @@ def save(form, actor=None, code=None, origin=None):
         for alias in form.alias.data:
             if alias.strip():  # check if it isn't empty
                 actor.link('P131', EntityMapper.insert('E82', alias))
-        link_ = None
         if origin:
-            origin_class = app.config['CODE_CLASS'][origin.class_.code]
-            if origin_class == 'reference':
-                link_ = origin.link('P67', actor)
-            elif origin_class == 'source':
+            view_name = get_view_name(origin)
+            if view_name == 'reference':
+                link_id = origin.link('P67', actor)
+                url = url_for('reference_link_update', link_id=link_id, origin_id=origin.id)
+            elif view_name == 'source':
                 origin.link('P67', actor)
-            elif origin_class == 'event':
-                link_ = origin.link('P11', actor)
-            elif origin_class == 'actor':
-                link_ = origin.link('OA7', actor)
+                url = url_for('source_view', id_=origin.id) + '#tab-actor'
+            elif view_name == 'event':
+                link_id = origin.link('P11', actor)
+                url = url_for('involvement_update', id_=link_id, origin_id=origin.id)
+            elif view_name == 'actor':
+                link_id = origin.link('OA7', actor)
+                url = url_for('relation_update', id_=link_id, origin_id=origin.id)
+        if form.continue_.data == 'yes' and code:
+            url = url_for('actor_insert', code=code)
         g.cursor.execute('COMMIT')
+        logger.log_user(actor.id, log_action)
+        flash(_('entity created') if log_action == 'insert' else _('info update'), 'info')
     except Exception as e:  # pragma: no cover
         g.cursor.execute('ROLLBACK')
         logger.log('error', 'database', 'transaction failed', e)
         flash(_('error transaction'), 'error')
-        return
-    return link_ if link_ else actor
+        return redirect(url_for('actor_index'))
+    return url
