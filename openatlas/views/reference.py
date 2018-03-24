@@ -11,9 +11,9 @@ from openatlas import app, logger
 from openatlas.forms.forms import TableField, build_form
 from openatlas.models.entity import EntityMapper
 from openatlas.models.link import LinkMapper
-from openatlas.util.util import (build_remove_link, get_base_table_data, get_entity_data,
+from openatlas.util.util import (display_remove_link, get_base_table_data, get_entity_data,
                                  is_authorized, link, required_group, truncate_string, uc_first,
-                                 was_modified)
+                                 was_modified, get_view_name)
 
 
 class ReferenceForm(Form):
@@ -60,19 +60,19 @@ class AddPlaceForm(Form):
 def reference_add(origin_id):
     """Link an entity to reference coming from the entity."""
     origin = EntityMapper.get_by_id(origin_id)
-    class_name = app.config['CODE_CLASS'][origin.class_.code]
+    view_name = get_view_name(origin)
     form = AddReferenceForm()
     if form.validate_on_submit():
         reference = EntityMapper.get_by_id(form.reference.data)
         reference.link('P67', origin.id, form.page.data)
-        return redirect(url_for(class_name + '_view', id_=origin.id) + '#tab-reference')
-    return render_template('reference/add.html', origin=origin, form=form, class_name=class_name)
+        return redirect(url_for(view_name + '_view', id_=origin.id) + '#tab-reference')
+    return render_template('reference/add.html', origin=origin, form=form, class_name=view_name)
 
 
 @app.route('/reference/add2/<int:reference_id>/<class_name>', methods=['POST', 'GET'])
 @required_group('editor')
 def reference_add2(reference_id, class_name):
-    """ Link an entity to reference coming from the reference."""
+    """Link an entity to reference coming from the reference."""
     reference_ = EntityMapper.get_by_id(reference_id)
     form = getattr(openatlas.views.reference, 'Add' + uc_first(class_name) + 'Form')()
     if form.validate_on_submit():
@@ -87,7 +87,7 @@ def reference_add2(reference_id, class_name):
 def reference_link_update(link_id, origin_id):
     link_ = LinkMapper.get_by_id(link_id)
     origin = EntityMapper.get_by_id(origin_id)
-    class_name = app.config['CODE_CLASS'][origin.class_.code]
+    view_name = get_view_name(origin)
     form = AddReferenceForm()
     form.save.label.text = _('save')
     del form.reference
@@ -95,17 +95,15 @@ def reference_link_update(link_id, origin_id):
         link_.description = form.page.data
         link_.update()
         flash(_('info update'), 'info')
-        tab = '#tab-reference'
-        if class_name == 'reference':
-            tab = '#tab-' + app.config['CODE_CLASS'][link_.range.class_.code]
-        return redirect(url_for(class_name + '_view', id_=origin.id) + tab)
+        tab = '#tab-' + get_view_name(link_.range) if view_name == 'reference' else '#tab-reference'
+        return redirect(url_for(view_name + '_view', id_=origin.id) + tab)
     form.page.data = link_.description
     return render_template(
         'reference/link-update.html',
         origin=origin,
         linked_object=link_.domain if link_.domain.id != origin.id else link_.range,
         form=form,
-        class_name=class_name)
+        class_name=view_name)
 
 
 @app.route('/reference/view/<int:id_>')
@@ -116,21 +114,29 @@ def reference_view(id_, unlink_id=None):
     if unlink_id:
         LinkMapper.delete_by_id(unlink_id)
         flash(_('link removed'), 'info')
-    tables = {'info': get_entity_data(reference)}
+    tables = {
+        'info': get_entity_data(reference),
+        'file': {'id': 'files', 'data': [], 'header': app.config['TABLE_HEADERS']['file']}}
     for name in ['source', 'event', 'actor', 'place']:
         header = app.config['TABLE_HEADERS'][name] + ['page']
         tables[name] = {'id': name, 'header': header, 'data': []}
+    for link_ in reference.get_links('P67', True):
+        data = get_base_table_data(link_.domain)
+        if is_authorized('editor'):
+            unlink = url_for('reference_view', id_=reference.id, unlink_id=link_.id) + '#tab-file'
+            data.append(display_remove_link(unlink, link_.domain.name))
+        tables['file']['data'].append(data)
     for link_ in reference.get_links('P67'):
-        name = app.config['CODE_CLASS'][link_.range.class_.code]
+        view_name = get_view_name(link_.range)
         data = get_base_table_data(link_.range)
         data.append(truncate_string(link_.description))
         if is_authorized('editor'):
             update_url = url_for('reference_link_update', link_id=link_.id, origin_id=reference.id)
             unlink_url = url_for(
-                'reference_view', id_=reference.id, unlink_id=link_.id) + '#tab-' + name
+                'reference_view', id_=reference.id, unlink_id=link_.id) + '#tab-' + view_name
             data.append('<a href="' + update_url + '">' + uc_first(_('edit')) + '</a>')
-            data.append(build_remove_link(unlink_url, link_.range.name))
-        tables[name]['data'].append(data)
+            data.append(display_remove_link(unlink_url, link_.range.name))
+        tables[view_name]['data'].append(data)
     return render_template('reference/view.html', reference=reference, tables=tables)
 
 
@@ -156,15 +162,7 @@ def reference_insert(code, origin_id=None):
     if origin:
         del form.insert_and_continue
     if form.validate_on_submit():
-        result = save(form, None, code, origin)
-        if not result:  # pragma: no cover
-            return render_template('reference/insert.html', form=form, code=code, origin=origin)
-        flash(_('entity created'), 'info')
-        if origin:
-            return redirect(url_for('reference_link_update', link_id=result, origin_id=origin_id))
-        if form.continue_.data == 'yes':
-            return redirect(url_for('reference_insert', code=code, origin_id=origin_id))
-        return redirect(url_for('reference_view', id_=result.id))
+        return redirect(save(form, code=code, origin=origin))
     return render_template('reference/insert.html', form=form, code=code, origin=origin)
 
 
@@ -196,34 +194,39 @@ def reference_update(id_):
             modifier = link(logger.get_log_for_advanced_view(reference.id)['modifier'])
             return render_template(
                 'reference/update.html', form=form, reference=reference, modifier=modifier)
-        if save(form, reference):
-            flash(_('info update'), 'info')
+        save(form, reference)
         return redirect(url_for('reference_view', id_=id_))
     return render_template('reference/update.html', form=form, reference=reference)
 
 
-def save(form, reference, code=None, origin=None):
+def save(form, reference=None, code=None, origin=None):
     g.cursor.execute('BEGIN')
     try:
-        if reference:
-            logger.log_user(reference.id, 'update')
-        else:
+        log_action = 'update'
+        if not reference:
+            log_action = 'insert'
             class_code = 'E31'
             system_type = code
             if code == 'carrier':
                 class_code = 'E84'
                 system_type = 'information carrier'
             reference = EntityMapper.insert(class_code, form.name.data, system_type)
-            logger.log_user(reference.id, 'insert')
         reference.name = form.name.data
         reference.description = form.description.data
         reference.update()
         reference.save_nodes(form)
-        link_ = reference.link('P67', origin) if origin else None
+        url = url_for('reference_view', id_=reference.id)
+        if origin:
+            link_id = reference.link('P67', origin)
+            url = url_for('reference_link_update', link_id=link_id, origin_id=origin.id)
+        if form.continue_.data == 'yes' and code:
+            url = url_for('reference_insert', code=code)
         g.cursor.execute('COMMIT')
+        logger.log_user(reference.id, log_action)
+        flash(_('entity created') if log_action == 'insert' else _('info update'), 'info')
     except Exception as e:  # pragma: no cover
         g.cursor.execute('ROLLBACK')
         logger.log('error', 'database', 'transaction failed', e)
         flash(_('error transaction'), 'error')
-        return
-    return link_ if link_ else reference
+        url = url_for('reference_index')
+    return url

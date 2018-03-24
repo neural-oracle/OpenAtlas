@@ -41,10 +41,10 @@ def build_form(form, form_name, entity=None, request_origin=None, entity2=None):
             if hasattr(form, 'opened'):
                 form_instance.opened.data = time.time()
         else:
-            nodes = [entity.type] if entity.type else []  # it's a link so use the link.type
+            nodes = [entity.type] if entity.type else []  # It's a link so use the link.type
         for node in nodes:
             root = g.nodes[node.root[-1]] if node.root else node
-            if root.id not in node_data:  # append only non root nodes
+            if root.id not in node_data:  # Append only non root nodes
                 node_data[root.id] = []
             node_data[root.id].append(node.id)
         for root_id, nodes in node_data.items():
@@ -126,8 +126,7 @@ class TreeSelect(HiddenInput):
                         $("#{name}-tree").jstree("search", $(this).val());
                     }});
                 }});
-            </script>
-        """.format(
+            </script>""".format(
             name=field.id,
             title=g.nodes[hierarchy_id].name,
             selection=selection,
@@ -172,8 +171,7 @@ class TreeMultiSelect(HiddenInput):
                 $("#{name}-tree-search").keyup(function(){{
                     $("#{name}-tree").jstree("search", $(this).val());
                 }});
-            </script>
-        """.format(
+            </script>""".format(
             name=field.id,
             title=g.nodes[int(field.id)].name,
             selection=selection,
@@ -203,7 +201,7 @@ class TableSelect(HiddenInput):
                         """.format(
                         name=field.id,
                         entity_id=entity.id,
-                        entity_name=truncate_string(entity.name, 40, False))
+                        entity_name=truncate_string(entity.name, span=False))
             table['data'].append(data)
         html = """
             <input id="{name}-button" name="{name}-button" class="table-select {required}"
@@ -265,8 +263,7 @@ class TableMultiSelect(HiddenInput):
             <div id="{name}-dialog" class="overlay-container">{pager}</div></div>
             <script>
                 $(document).ready(function () {{createOverlay("{name}", "{title}", true);}});
-            </script>
-            """.format(
+            </script>""".format(
                 name=field.id,
                 title=_(field.id.replace('_', ' ')),
                 selection=selection,

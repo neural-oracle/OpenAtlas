@@ -40,7 +40,8 @@ def uc_first(self, string):
 @blueprint.app_template_filter()
 @evalcontextfilter
 def nl2br(self, value):
-    result = u'\n\n'.join(u'<p>%s</p>' % p.replace('\n', '<br>\n') for p in paragraph_re.split(escape(value)))
+    result = u'\n\n'.join(
+        u'<p>%s</p>' % p.replace('\n', '<br>\n') for p in paragraph_re.split(escape(value)))
     return result
 
 
@@ -125,7 +126,7 @@ def description(self, entity):
 @jinja2.contextfilter
 @blueprint.app_template_filter()
 def page_buttons(self, entity):
-    view = app.config['CODE_CLASS'][entity.class_.code]
+    view = util.get_view_name(entity)
     codes = app.config['CLASS_CODES'][view]
     html = ''
     pager_ids = EntityMapper.get_page_ids(entity, codes)
@@ -149,6 +150,7 @@ def page_buttons(self, entity):
 @jinja2.contextfilter
 @blueprint.app_template_filter()
 def display_form(self, form, form_id=None, for_persons=False):
+    multipart = 'enctype="multipart/form-data"' if hasattr(form, 'file') else ''
     if hasattr(form, 'name') and form.name.data:  # if name.data exists it's an update
         if hasattr(form, 'save') and hasattr(form.save, 'label'):
             form.save.label.text = _('save')
@@ -167,15 +169,28 @@ def display_form(self, form, form_id=None, for_persons=False):
             except ValueError:
                 hierarchy_id = NodeMapper.get_hierarchy_by_name(util.uc_first(field.id)).id
             node = g.nodes[hierarchy_id]
+            label = node.name
+            tooltip = '<span class="tooltip" title="' + _('tooltip type') + '">i</span>'
             if node.name in app.config['BASE_TYPES']:
-                base_type = '<div class="table-row"><div><label>' + util.uc_first(_('type')) + '</label>'
-                base_type += ' <span class="tooltip" title="' + _('tooltip type') + '">i</span></div>'
-                base_type += '<div class="table-cell">' + str(field(class_=class_)) + errors + '</div></div>'
-                html['types'] = base_type + html['types']
-                continue
-            html['types'] += '<div class="table-row"><div><label>' + node.name + '</label>'
-            html['types'] += ' <span class="tooltip" title="' + _('tooltip type') + '">i</span></div>'
-            html['types'] += '<div class="table-cell">' + str(field(class_=class_)) + errors + '</div></div>'
+                label = util.uc_first(_('type'))
+            if field.label.text == 'super':
+                label = util.uc_first(_('super'))
+                tooltip = ''
+            type_field = """
+                <div class="table-row">
+                    <div>
+                        <label>{label}</label>
+                        {tooltip}
+                    </div>
+                    <div class="table-cell">
+                        {field}
+                    </div>
+                </div>
+            """.format(label=label, tooltip=tooltip, field=str(field(class_=class_)) + errors)
+            if node.name in app.config['BASE_TYPES']:  # base type should be above other fields
+                html['types'] = type_field + html['types']
+            else:
+                html['types'] += type_field
             continue
         if field.type in ['CSRFTokenField', 'HiddenField']:
             html['header'] += str(field)
@@ -183,7 +198,8 @@ def display_form(self, form, form_id=None, for_persons=False):
         field.label.text = util.uc_first(field.label.text)
         field.label.text += ' *' if field.flags.required and form_id != 'login-form' else ''
         if field.id == 'description':
-            html['footer'] += '<br />' + str(field.label) + '<br />' + str(field(class_=class_)) + '<br />'
+            html['footer'] += '<br />' + str(field.label) + '<br />' + str(field(class_=class_))
+            html['footer'] += '<br />'
             continue
         if field.type == 'SubmitField':
             html['footer'] += str(field)
@@ -195,14 +211,17 @@ def display_form(self, form, form_id=None, for_persons=False):
         if field.description:
             field.label.text += ' <span class="tooltip" title="' + field.description + '">i</span>'
         errors = ' <span class="error">' + errors + ' </span>' if errors else ''
-        if field.id == 'name':
+        if field.id in ('file', 'name'):
             html['header'] += '<div class="table-row"><div>' + str(field.label) + '</div>'
-            html['header'] += '<div class="table-cell">' + str(field(class_=class_)) + errors + '</div></div>'
+            html['header'] += '<div class="table-cell">' + str(field(class_=class_)) + errors
+            html['header'] += '</div></div>'
             continue
         html['main'] += '<div class="table-row"><div>' + str(field.label) + '</div>'
-        html['main'] += '<div class="table-cell">' + str(field(class_=class_)).replace('> ', '>') + errors + '</div></div>'
+        html['main'] += '<div class="table-cell">' + str(field(class_=class_)).replace('> ', '>')
+        html['main'] += errors + '</div></div>'
 
-    html_all = '<form method="post"' + id_attribute + '>' + '<div class="data-table">'
+    html_all = '<form method="post"' + id_attribute + ' ' + multipart + '>'
+    html_all += '<div class="data-table">'
     html_all += html['header'] + html['types'] + html['main'] + html['footer'] + '</div></form>'
     return html_all
 
@@ -229,23 +248,27 @@ def truncate_string(self, string):
 
 @jinja2.contextfilter
 @blueprint.app_template_filter()
-def build_delete_link(self, entity):
-    """ Build a link to delete an entity with a JavaScript confirmation dialog."""
+def get_view_name(self, entity):
+    return util.get_view_name(entity)
+
+
+@jinja2.contextfilter
+@blueprint.app_template_filter()
+def display_delete_link(self, entity):
+    """Build a link to delete an entity with a JavaScript confirmation dialog."""
     name = entity.name.replace('\'', '')
     confirm = 'onclick="return confirm(\'' + _('Delete %(name)s?', name=name) + '\')"'
-    url = url_for(app.config['CODE_CLASS'][entity.class_.code] + '_delete', id_=entity.id)
+    url = url_for(util.get_view_name(entity) + '_delete', id_=entity.id)
     return '<a ' + confirm + ' href="' + url + '">' + util.uc_first(_('delete')) + '</a>'
 
 
 @jinja2.contextfilter
 @blueprint.app_template_filter()
 def display_menu(self, origin):
-    """ Returns html with the menu and mark appropriate item as selected."""
+    """Returns html with the menu and mark appropriate item as selected."""
     html = ''
     if current_user.is_authenticated:
-        selected = ''
-        if origin:
-            selected = app.config['CODE_CLASS'][origin.class_.code]
+        selected = util.get_view_name(origin) if origin else ''
         items = ['overview', 'source', 'event', 'actor', 'place', 'reference', 'types', 'admin']
         for item in items:
             if selected:
@@ -261,7 +284,7 @@ def display_menu(self, origin):
 @jinja2.contextfilter
 @blueprint.app_template_filter()
 def display_debug_info(self, debug_model, form):
-    """ Returns html with debug information about database queries and form errors."""
+    """Returns html with debug information about database queries and form errors."""
     html = ''
     for name, value in debug_model.items():
         if name in ['current']:
