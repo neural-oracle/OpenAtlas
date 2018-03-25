@@ -58,3 +58,10 @@ with
 
     dropdb ostalpen
     createdb ostalpen -O openatlas
+
+## Put new version online
+
+- the new version needs new passwords for user
+- change settings (mail!)
+- change content text
+- adjust user

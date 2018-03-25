@@ -11,8 +11,7 @@ sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 """
 To do:
 
-- add type case study - eastern alps
-- add source links to actors, places, ... (add documented in)
+- next persons?
 
 After gis implementation:
 - split case studies
@@ -65,7 +64,7 @@ def link(property_code, domain_id, range_id, description=None):
     return cursor_dpp.fetchone()[0]
 
 
-def insert_entity(entity):
+def insert_entity(entity, with_case=False):
     sql = """
         INSERT INTO model.entity (name, description, class_code, system_type, ostalpen_id, created)
         VALUES (%(name)s, %(description)s, %(class_code)s, %(system_type)s, %(ostalpen_id)s,
@@ -93,8 +92,15 @@ def insert_entity(entity):
     entity.id = cursor_dpp.fetchone()[0]
     sql = """
         INSERT INTO web.user_log (user_id, action, entity_id, created)
-        VALUES (38, 'insert', %(entity_id)s, %(created)s);"""
-    cursor_dpp.execute(sql, {'entity_id': entity.id, 'created': entity.created})
+        VALUES (%(ostalpen_user_id)s, 'insert', %(entity_id)s, %(created)s);"""
+    cursor_dpp.execute(sql, {
+        'ostalpen_user_id': ostalpen_user_id, 'entity_id': entity.id, 'created': entity.created})
+    if with_case:
+        sql = """
+            INSERT INTO model.link (property_code, domain_id, range_id)
+            VALUES (%(property_code)s, %(domain_id)s, %(range_id)s);"""
+        cursor_dpp.execute(sql, {
+            'property_code': 'P2', 'domain_id': entity.id, 'range_id': ostalpen_type_id})
 
 
 # Add comment to ostalpen_id
@@ -148,11 +154,11 @@ for row in cursor_ostalpen.fetchall():
 for e in entities:
     if not e.name:
         continue
-    if e.class_code == 'E021':
+    if e.class_code == 'E021':  # Person
         e.class_code = 'E21'
-        insert_entity(e)
+        insert_entity(e, with_case=True)
         count['E21 person'] += 1
-    elif e.class_code == 'E033':
+    elif e.class_code == 'E033':  # Linguistic Object (Source)
         if e.id_name.startswith('tbl_2_quelle_original'):
             e.system_type = 'source translation'
             count['E33 translation'] += 1
@@ -163,14 +169,14 @@ for e in entities:
             e.system_type = 'source content'
             count['E33 source'] += 1
         e.class_code = 'E33'
-        insert_entity(e)
-    elif e.class_code == 'E074':
+        insert_entity(e, with_case=True if e.system_type == 'source content' else False)
+    elif e.class_code == 'E074':  # Group
         e.class_code = 'E74'
-        insert_entity(e)
+        insert_entity(e, with_case=True)
         count['E74 group'] += 1
-    elif e.class_code == 'E008':
+    elif e.class_code == 'E008':  # Acquisition
         e.class_code = 'E8'
-        insert_entity(e)
+        insert_entity(e, with_case=True)
         count['E8 acquisition'] += 1
     else:
         missing_classes[e.class_code] = e.class_code
@@ -198,6 +204,15 @@ for row in cursor_ostalpen.fetchall():
             count['link'] += 2
         else:
             print('Error missing translation type, id: ' + str(domain.id) + ', ' + domain.id_name)
+    elif row.links_cidoc_number_direction == 4:  # documents
+        # Todo: remove when all entites
+        if row.links_entity_uid_to not in new_entities or \
+                row.links_entity_uid_from not in new_entities:
+                    continue
+        count['link'] += 1
+        domain = new_entities[row.links_entity_uid_to]
+        range_ = new_entities[row.links_entity_uid_from]
+        link('P67', domain.id, range_.id ,row.links_annotation)
 
 for name, count in count.items():
     print(name + ': ' + str(count))
