@@ -31,32 +31,36 @@ Important!
 A user with username "OpenAtlas" and password "change_me_PLEASE!" is created.
 Change this account immediately!
 
+Uncomment "CREATE EXTENSION postgis;" in top off install/structure.sql
+
 As postgres
 
     $ createuser openatlas -P
     $ createdb openatlas -O openatlas
-
-Uncomment "CREATE EXTENSION postgis;" in top off install/structure.sql
-
     $ cd install
     $ cat structure.sql data_web.sql data_model.sql data_node.sql | psql -d openatlas -f -
 
 ### Files
 
-Copy the files to /var/www/your_sitename
+Copy the files to /var/www/your_sitename or clone it from GitHub
 
 ## Configuration
 
-Create the folder and file instance/production.py
+Copy instance/example_production.py to instance/production.py
 
-Copy install/example_config.py to instance/production.py and add/change the values as appropriate.
+    $ cp instance/example_production.py instance/production.py
+
+Add/change values as appropriate.
 
 ## Apache
 
-use install/example_apache.conf as template for a new vhost
+As root copy and adapt install/example_apache.conf for a new vhost, activate the site:
 
     # a2ensite your_sitename
-    # apacha2ctl configtest
+
+Test Apache configuration and restart
+
+    # apache2ctl configtest
     # service apache2 restart
 
 ## File Upload
@@ -68,7 +72,6 @@ Make the openatlas/uploads directory writeable for apache e.g.
 ## Finishing
 
 Login with username "OpenAtlas" and password "change_me_PLEASE!" and change the password in profile.
-Remove the data/install directory on production systems
 
 ## Unit tests (optional)
 

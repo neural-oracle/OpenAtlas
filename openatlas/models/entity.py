@@ -117,9 +117,10 @@ class EntityMapper:
         LEFT JOIN model.link l2 on e.id = l2.range_id
         LEFT JOIN model.link_property lp2 on e.id = lp2.range_id
         WHERE
-            l1.domain_id IS NULL AND
-            l2.range_id IS NULL AND
-            lp2.range_id IS NULL """
+            l1.domain_id IS NULL
+            AND l2.range_id IS NULL
+            AND lp2.range_id IS NULL
+            AND e.class_code != 'E55'"""
 
     @staticmethod
     def update(entity):
@@ -271,7 +272,9 @@ class EntityMapper:
     @staticmethod
     def delete_orphans(parameter):
         from openatlas.models.node import NodeMapper
+        class_codes = tuple(app.config['CODE_CLASS'].keys())
         if parameter == 'orphans':
+            class_codes = class_codes + ('E55',)
             sql_where = EntityMapper.sql_orphan + " AND e.class_code NOT IN %(class_codes)s"
         elif parameter == 'unlinked':
             sql_where = EntityMapper.sql_orphan + " AND e.class_code IN %(class_codes)s"
@@ -284,7 +287,7 @@ class EntityMapper:
         else:
             return 0
         sql = "DELETE FROM model.entity WHERE id IN (" + sql_where + ");"
-        g.cursor.execute(sql, {'class_codes': tuple(app.config['CODE_CLASS'].keys())})
+        g.cursor.execute(sql, {'class_codes': class_codes})
         return g.cursor.rowcount
 
     @staticmethod
