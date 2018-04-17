@@ -1,4 +1,4 @@
-# Created 2017 by Alexander Watzinger and others. Please see README.md for licensing information
+# Created by Alexander Watzinger and others. Please see README.md for licensing information
 import glob
 import os
 import re
@@ -134,6 +134,8 @@ def build_table_form(class_name, linked_entities):
     linked_ids = [entity.id for entity in linked_entities]
     if class_name == 'file':
         entities = EntityMapper.get_by_system_type('file')
+    elif class_name == 'place':
+        entities = EntityMapper.get_by_system_type('place')
     else:
         entities = EntityMapper.get_by_codes(class_name)
     for entity in entities:
@@ -172,7 +174,7 @@ def get_entity_data(entity, location=None):
         name = 'type' if root.name in app.config['BASE_TYPES'] else root.name
         if root.name not in type_data:
             type_data[name] = []
-        type_data[name].append(node.name)
+        type_data[name].append(link(node))
     type_data = OrderedDict(sorted(type_data.items(), key=lambda t: t[0]))  # sort by name
     if 'type' in type_data:  # move the base type to the top
         type_data.move_to_end('type', last=False)
@@ -403,7 +405,7 @@ def link(entity):
             url = url_for('event_view', id_=entity.id)
         elif entity.class_.code in ('E21', 'E74', 'E40'):
             url = url_for('actor_view', id_=entity.id)
-        elif entity.class_.code == 'E18':
+        elif entity.class_.code in ('E18', 'E22'):
             url = url_for('place_view', id_=entity.id)
         elif entity.class_.code in ('E31', 'E84'):
             url = url_for('reference_view', id_=entity.id)

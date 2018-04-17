@@ -1,4 +1,4 @@
-# Copyright 2017 by Alexander Watzinger and others. Please see README.md for licensing information
+# Created by Alexander Watzinger and others. Please see README.md for licensing information
 import os
 
 from flask import flash, g, render_template, request, send_from_directory, session, url_for
@@ -32,8 +32,7 @@ def allowed_file(name):
 
 
 def preview_file(name):
-    displayed_extensions = session['settings']['file_upload_display_extension'].split()
-    return '.' in name and name.rsplit('.', 1)[1].lower() in displayed_extensions
+    return name.rsplit('.', 1)[1].lower() in app.config['DISPLAY_FILE_EXTENSIONS']
 
 
 @app.route('/download/<path:filename>')
