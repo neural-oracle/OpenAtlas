@@ -1,4 +1,4 @@
-# Created 2017 by Alexander Watzinger and others. Please see README.md for licensing information
+# Created by Alexander Watzinger and others. Please see README.md for licensing information
 import ast
 import time
 
@@ -21,7 +21,6 @@ def build_form(form, form_name, entity=None, request_origin=None, entity2=None):
     for id_, node in NodeMapper.get_nodes_for_form(form_name).items():
         custom_list.append(id_)
         setattr(form, str(id_), TreeMultiField(str(id_)) if node.multiple else TreeField(str(id_)))
-
     form_instance = form(obj=entity)
     # Delete custom fields except the ones specified for the form
     delete_list = []  # Can't delete fields in the loop so creating a list for later deletion
@@ -102,9 +101,9 @@ class TreeSelect(HiddenInput):
         html = """
             <input id="{name}-button" name="{name}-button" type="text"
                 class="table-select {required}" onfocus="this.blur()"
-                readonly="readonly" value="{selection}" placeholder="Select" />
+                readonly="readonly" value="{selection}" placeholder="{change_label}" />
             <a id="{name}-clear" {clear_style} class="button"
-                onclick="clearSelect('{name}');">Clear</a>
+                onclick="clearSelect('{name}');">{clear_label}</a>
             <div id="{name}-overlay" class="overlay">
                 <div id="{name}-dialog" class="overlay-container">
                     <input class="tree-filter" id="{name}-tree-search" placeholder="Filter" />
@@ -129,6 +128,8 @@ class TreeSelect(HiddenInput):
             </script>""".format(
             name=field.id,
             title=g.nodes[hierarchy_id].name,
+            change_label=uc_first(_('change')),
+            clear_label=uc_first(_('clear')),
             selection=selection,
             tree_data=NodeMapper.get_tree_data(hierarchy_id, selected_ids),
             clear_style='' if selection else ' style="display: none;" ',
@@ -152,7 +153,7 @@ class TreeMultiSelect(HiddenInput):
                 selected_ids.append(entity_id)
                 selection += g.nodes[entity_id].name + '<br />'
         html = """
-            <span id="{name}-button" class="button">Change</span>
+            <span id="{name}-button" class="button">{change_label}</span>
             <div id="{name}-selection" style="text-align:left;">{selection}</div>
             <div id="{name}-overlay" class="overlay">
                <div id="{name}-dialog" class="overlay-container">
@@ -175,6 +176,7 @@ class TreeMultiSelect(HiddenInput):
             name=field.id,
             title=g.nodes[int(field.id)].name,
             selection=selection,
+            change_label=uc_first(_('change')),
             tree_data=NodeMapper.get_tree_data(int(field.id), selected_ids))
         return super(TreeMultiSelect, self).__call__(field, **kwargs) + html
 
@@ -192,7 +194,11 @@ class TableSelect(HiddenInput):
             class_ = 'place'
         header = app.config['TABLE_HEADERS'][class_]
         table = {'id': field.id, 'header': header, 'data': []}
-        for entity in EntityMapper.get_by_codes(class_):
+        if class_ == 'place':
+            entities = EntityMapper.get_by_system_type('place')
+        else:
+            entities = EntityMapper.get_by_codes(class_)
+        for entity in entities:
             # Todo: don't show self e.g. at source
             if field.data and entity.id == int(field.data):
                 selection = entity.name
@@ -205,16 +211,18 @@ class TableSelect(HiddenInput):
             table['data'].append(data)
         html = """
             <input id="{name}-button" name="{name}-button" class="table-select {required}"
-                type="text" placeholder="Select" onfocus="this.blur()" readonly="readonly"
+                type="text" placeholder="{change_label}" onfocus="this.blur()" readonly="readonly"
                 value="{selection}">
             <a id="{name}-clear" class="button" {clear_style}
-                onclick="clearSelect('{name}');">Clear</a>
+                onclick="clearSelect('{name}');">{clear_label}</a>
             <div id="{name}-overlay" class="overlay">
             <div id="{name}-dialog" class="overlay-container">{pager}</div></div>
             <script>$(document).ready(function () {{createOverlay("{name}", "{title}");}});</script>
             """.format(
                 name=field.id,
                 title=_(field.id.replace('_', ' ')),
+                change_label=uc_first(_('change')),
+                clear_label=uc_first(_('clear')),
                 pager=pager(table),
                 selection=selection,
                 clear_style='' if selection else ' style="display: none;" ',
@@ -227,7 +235,7 @@ class TableField(HiddenField):
 
 
 class TableMultiSelect(HiddenInput):
-    """Table with checkboxes used in forms."""
+    """ Table with checkboxes used in forms."""
 
     def __call__(self, field, **kwargs):
         if field.data and isinstance(field.data, str):
@@ -242,10 +250,14 @@ class TableMultiSelect(HiddenInput):
             'id': field.id,
             'header': app.config['TABLE_HEADERS'][class_],
             'data': []}
-        # make checkbox column sortable and show selected on top
+        # Make checkbox column sortable and show selected on top
         table['headers'] = 'headers: { ' + str(len(table['header'])) + ': { sorter: "checkbox" } }'
         table['sort'] = 'sortList: [[' + str(len(table['header'])) + ',0],[0,0]]'
-        for entity in EntityMapper.get_by_codes(class_):
+        if class_ == 'place':
+            entities = EntityMapper.get_by_system_type('place')
+        else:
+            entities = EntityMapper.get_by_codes(class_)
+        for entity in entities:
             selection += entity.name + '<br/>' if field.data and entity.id in field.data else ''
             data = get_base_table_data(entity)
             data[0] = truncate_string(entity.name)  # replace entity link with entity name
@@ -257,7 +269,7 @@ class TableMultiSelect(HiddenInput):
             data.append(html)
             table['data'].append(data)
         html = """
-            <span id="{name}-button" class="button">Select</span><br />
+            <span id="{name}-button" class="button">{change_label}</span><br />
             <div id="{name}-selection" class="selection" style="text-align:left;">{selection}</div>
             <div id="{name}-overlay" class="overlay">
             <div id="{name}-dialog" class="overlay-container">{pager}</div></div>
@@ -265,6 +277,7 @@ class TableMultiSelect(HiddenInput):
                 $(document).ready(function () {{createOverlay("{name}", "{title}", true);}});
             </script>""".format(
                 name=field.id,
+                change_label=uc_first(_('change')),
                 title=_(field.id.replace('_', ' ')),
                 selection=selection,
                 pager=pager(table))

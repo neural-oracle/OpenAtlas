@@ -1,4 +1,4 @@
-# Created 2017 by Alexander Watzinger and others. Please see README.md for licensing information
+# Created by Alexander Watzinger and others. Please see README.md for licensing information
 from flask import flash, g, render_template, request, url_for
 from flask_babel import lazy_gettext as _
 from werkzeug.utils import redirect
@@ -27,11 +27,22 @@ class PlaceForm(DateForm):
     opened = HiddenField()
 
 
+class FeatureForm(DateForm):
+    name = StringField(_('name'), [DataRequired()])
+    description = TextAreaField(_('description'))
+    save = SubmitField(_('insert'))
+    gis_points = HiddenField()
+    gis_polygons = HiddenField()
+    insert_and_continue = SubmitField(_('insert and continue'))
+    continue_ = HiddenField()
+    opened = HiddenField()
+
+
 @app.route('/place')
 @required_group('readonly')
 def place_index():
     table = {'id': 'place', 'header': app.config['TABLE_HEADERS']['place'], 'data': []}
-    for place in EntityMapper.get_by_codes('place'):
+    for place in EntityMapper.get_by_system_type('place'):
         table['data'].append(get_base_table_data(place))
     return render_template('place/index.html', table=table, gis_data=GisMapper.get_all())
 
@@ -41,14 +52,36 @@ def place_index():
 @required_group('editor')
 def place_insert(origin_id=None):
     origin = EntityMapper.get_by_id(origin_id) if origin_id else None
-    form = build_form(PlaceForm, 'Place')
-    if origin:
+    if origin and origin.system_type == 'place':
+        title = 'feature'
+        form = build_form(FeatureForm, 'Feature')
+    elif origin and origin.system_type == 'feature':
+        title = 'stratigraphic unit'
+        form = build_form(FeatureForm, 'Stratigraphic Unit')
+    elif origin and origin.system_type == 'stratigraphic_unit':
+        title = 'find'
+        form = build_form(FeatureForm, 'Find')
+    else:
+        title = 'place'
+        form = build_form(PlaceForm, 'Place')
+    if origin \
+            and origin.system_type not in ['place', 'feature', 'stratigraphic_unit'] \
+            and hasattr(form, 'insert_and_continue'):
         del form.insert_and_continue
     if form.validate_on_submit():
         return redirect(save(form, origin=origin))
-    form.alias.append_entry('')
+    if title == 'place':
+        form.alias.append_entry('')
     gis_data = GisMapper.get_all()
-    return render_template('place/insert.html', form=form, origin=origin, gis_data=gis_data)
+    place = None
+    feature = None
+    if origin and origin.system_type == 'stratigraphic_unit':
+        feature = origin.get_linked_entity('P46', True)
+        place = feature.get_linked_entity('P46', True)
+    elif origin and origin.system_type == 'feature':
+        place = origin.get_linked_entity('P46', True)
+    return render_template('place/insert.html', form=form, title=title, place=place,
+                           gis_data=gis_data, feature=feature, origin=origin)
 
 
 @app.route('/place/view/<int:id_>')
@@ -72,6 +105,16 @@ def place_view(id_, unlink_id=None):
         'actor': {
             'id': 'actor', 'data': [],
             'header': [_('actor'), _('property'), _('class'), _('first'), _('last')]}}
+    if object_.system_type == 'place':
+        tables['feature'] = {'id': 'feature', 'data': [],
+                             'header': app.config['TABLE_HEADERS']['place'] + [_('description')]}
+    if object_.system_type == 'feature':
+        tables['stratigraphic_unit'] = {
+            'id': 'stratigraphic', 'data': [], 'header':
+            app.config['TABLE_HEADERS']['place'] + [_('description')]}
+    if object_.system_type == 'stratigraphic_unit':
+        tables['find'] = {'id': 'find', 'data': [],
+                          'header': app.config['TABLE_HEADERS']['place'] + [_('description')]}
     for link_ in object_.get_links('P67', True):
         data = get_base_table_data(link_.domain)
         view_name = get_view_name(link_.domain)
@@ -86,6 +129,12 @@ def place_view(id_, unlink_id=None):
         tables[view_name]['data'].append(data)
     for event in location.get_linked_entities(['P7', 'P24'], True):
         tables['event']['data'].append(get_base_table_data(event))
+    has_subunits = False
+    for entity in object_.get_linked_entities('P46'):
+        has_subunits = True
+        data = get_base_table_data(entity)
+        data.append(truncate_string(entity.description))
+        tables[entity.system_type]['data'].append(data)
     for link_ in location.get_links(['P74', 'OA8', 'OA9'], True):
         actor = EntityMapper.get_by_id(link_.domain.id)
         tables['actor']['data'].append([
@@ -97,12 +146,32 @@ def place_view(id_, unlink_id=None):
     gis_data = GisMapper.get_all(object_.id) if location else None
     if gis_data['gisPointSelected'] == '[]' and gis_data['gisPolygonSelected'] == '[]':
         gis_data = None
-    return render_template('place/view.html', object_=object_, tables=tables, gis_data=gis_data)
+    place = None
+    feature = None
+    stratigraphic_unit = None
+    if object_.system_type == 'find':
+        stratigraphic_unit = object_.get_linked_entity('P46', True)
+        feature = stratigraphic_unit.get_linked_entity('P46', True)
+        place = feature.get_linked_entity('P46', True)
+    elif object_.system_type == 'stratigraphic_unit':
+        feature = object_.get_linked_entity('P46', True)
+        place = feature.get_linked_entity('P46', True)
+    elif object_.system_type == 'feature':
+        place = object_.get_linked_entity('P46', True)
+    return render_template('place/view.html', object_=object_, tables=tables, gis_data=gis_data,
+                           place=place, feature=feature, stratigraphic_unit=stratigraphic_unit,
+                           has_subunits=has_subunits)
 
 
 @app.route('/place/delete/<int:id_>')
 @required_group('editor')
 def place_delete(id_):
+    entity = EntityMapper.get_by_id(id_)
+    if entity.get_linked_entities('P46'):
+        flash(_('Deletion not possible if subunits exists'), 'error')
+        return redirect(url_for('place_view', id_=id_))
+    system_type = entity.system_type
+    parent = None if system_type == 'place' else LinkMapper.get_linked_entity(id_, 'P46', True)
     g.cursor.execute('BEGIN')
     try:
         EntityMapper.delete(id_)
@@ -113,7 +182,10 @@ def place_delete(id_):
         logger.log('error', 'database', 'transaction failed', e)
         flash(_('error transaction'), 'error')
     flash(_('entity deleted'), 'info')
-    return redirect(url_for('place_index'))
+    url = url_for('place_index')
+    if parent:
+        url = url_for('place_view', id_=parent.id) + '#tab-' + system_type
+    return redirect(url)
 
 
 @app.route('/place/update/<int:id_>', methods=['POST', 'GET'])
@@ -122,7 +194,14 @@ def place_update(id_):
     object_ = EntityMapper.get_by_id(id_)
     object_.set_dates()
     location = object_.get_linked_entity('P53')
-    form = build_form(PlaceForm, 'Place', object_, request, location)
+    if object_.system_type == 'feature':
+        form = build_form(FeatureForm, 'Feature', object_, request, location)
+    elif object_.system_type == 'stratigraphic_unit':
+        form = build_form(FeatureForm, 'Stratigraphic Unit', object_, request, location)
+    elif object_.system_type == 'find':
+        form = build_form(FeatureForm, 'Find', object_, request, location)
+    else:
+        form = build_form(PlaceForm, 'Place', object_, request, location)
     if form.validate_on_submit():
         if was_modified(form, object_):  # pragma: no cover
             del form.save
@@ -134,9 +213,23 @@ def place_update(id_):
         return redirect(url_for('place_view', id_=id_))
     for alias in [x.name for x in object_.get_linked_entities('P1')]:
         form.alias.append_entry(alias)
-    form.alias.append_entry('')
+    if object_.system_type == 'place':
+        form.alias.append_entry('')
     gis_data = GisMapper.get_all(object_.id)
-    return render_template('place/update.html', form=form, object_=object_, gis_data=gis_data)
+    place = None
+    feature = None
+    stratigraphic_unit = None
+    if object_.system_type == 'find':
+        stratigraphic_unit = object_.get_linked_entity('P46', True)
+        feature = stratigraphic_unit.get_linked_entity('P46', True)
+        place = feature.get_linked_entity('P46', True)
+    if object_.system_type == 'stratigraphic_unit':
+        feature = object_.get_linked_entity('P46', True)
+        place = feature.get_linked_entity('P46', True)
+    elif object_.system_type == 'feature':
+        place = object_.get_linked_entity('P46', True)
+    return render_template('place/update.html', form=form, object_=object_, gis_data=gis_data,
+                           place=place, feature=feature, stratigraphic_unit=stratigraphic_unit)
 
 
 def save(form, object_=None, location=None, origin=None):
@@ -149,7 +242,15 @@ def save(form, object_=None, location=None, origin=None):
             GisMapper.delete_by_entity(location)
         else:
             log_action = 'insert'
-            object_ = EntityMapper.insert('E18', form.name.data)
+            if origin and origin.system_type == 'stratigraphic_unit':
+                object_ = EntityMapper.insert('E22', form.name.data, 'find')
+            else:
+                system_type = 'place'
+                if origin and origin.system_type == 'place':
+                    system_type = 'feature'
+                elif origin and origin.system_type == 'feature':
+                    system_type = 'stratigraphic_unit'
+                object_ = EntityMapper.insert('E18', form.name.data, system_type)
             location = EntityMapper.insert('E53', 'Location of ' + form.name.data, 'place location')
             object_.link('P53', location)
         object_.name = form.name.data
@@ -160,16 +261,19 @@ def save(form, object_=None, location=None, origin=None):
         location.name = 'Location of ' + form.name.data
         location.update()
         location.save_nodes(form)
-        for alias in form.alias.data:
-            if alias.strip():  # check if it isn't empty
-                object_.link('P1', EntityMapper.insert('E41', alias))
+        if hasattr(form, 'alias'):
+            for alias in form.alias.data:
+                if alias.strip():  # check if it isn't empty
+                    object_.link('P1', EntityMapper.insert('E41', alias))
         url = url_for('place_view', id_=object_.id)
         if origin:
-            view_name = get_view_name(origin)
             url = url_for(get_view_name(origin) + '_view', id_=origin.id) + '#tab-place'
-            if view_name == 'reference':
+            if get_view_name(origin) == 'reference':
                 link_id = origin.link('P67', object_)
                 url = url_for('reference_link_update', link_id=link_id, origin_id=origin.id)
+            elif origin.system_type in ['place', 'feature', 'stratigraphic_unit']:
+                url = url_for('place_view', id_=object_.id)
+                origin.link('P46', object_)
             else:
                 origin.link('P67', object_)
         GisMapper.insert(location, form)
