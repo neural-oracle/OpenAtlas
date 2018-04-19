@@ -12,7 +12,6 @@ sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 To do:
 
 Places:
- - geom
  - links to sources
  - other links
  - feature, su, ...
@@ -120,6 +119,7 @@ cursor_dpp.execute(sql_)
 new_entities = {}
 missing_classes = {}
 count = {
+    'Gis point': 0,
     'E21 person': 0,
     'E18 place': 0,
     'E33 source': 0,
@@ -197,8 +197,9 @@ for e in entities:
 
 sql_ = """
     SELECT
-        uid, entity_name_uri, entity_type, entity_description, start_time_abs,
-        end_time_abs, start_time_text, end_time_text, timestamp_creation, name_path
+        uid, entity_name_uri, entity_type, entity_description, start_time_abs, srid_epsg,
+        end_time_abs, start_time_text, end_time_text, timestamp_creation, name_path,
+        x_lon_easting, y_lat_northing
     FROM openatlas.sites;"""
 cursor_ostalpen.execute(sql_)
 places = []
@@ -210,6 +211,9 @@ for row in cursor_ostalpen.fetchall():
     e.description = row.entity_description
     e.start_time_text = row.start_time_text
     e.start_time_abs = row.start_time_abs
+    e.srid_epsg = row.srid_epsg
+    e.x = row.x_lon_easting
+    e.y = row.y_lat_northing
     places.append(e)
 
 for e in places:
@@ -224,21 +228,15 @@ for e in places:
     e.name = 'Location of ' + e.name
     location_id = insert_entity(e)
     link('P53', object_id, location_id)
-
-
-    """
-    SELECT ST_AsText(
-    
-      ST_Transform(
-        ST_GeomFromText('POINT(646274.7681 5429433.0725)',32633),4326)
-      
-    
-    ) AS whatever FROM openatlas.sites WHERE srid_epsg = 32633;"""
-
-
-
+    if e.srid_epsg == 32633 and e.x and e.y:
+        sql = """
+        INSERT INTO gis.point (name, entity_id, type, created, geom)
+        VALUES ('', %(entity_id)s, 'centerpoint', %(created)s,(
+            SELECT ST_SetSRID(ST_Transform(ST_GeomFromText('POINT({x} {y})',32633),4326),4326)
+        ))""".format(x=e.x, y=e.y)
+        cursor_dpp.execute(sql, {'entity_id': location_id, 'created': e.created})
+        count['Gis point'] += 1
     count['E18 place'] += 1
-
 
 # Get links in DPP
 sql_ = """
