@@ -12,10 +12,14 @@ sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 To do:
 
 Places:
+
+ - feature, su, ... (check links)
+ - dates
+
+
  - links to sources
  - other links
- - feature, su, ...
- - dates,
+ 
  - types
 
 After gis implementation:
@@ -219,16 +223,153 @@ for row in cursor_ostalpen.fetchall():
 for e in places:
     if not e.name:
         continue
-    # split place, features ...
     e.class_code = 'E18'
     e.system_type = 'place'
     object_id = insert_entity(e, with_case_study=True)
+    new_entities[e.ostalpen_id] = e
     e.system_type = 'place location'
     e.class_code = 'E53'
     e.name = 'Location of ' + e.name
     location_id = insert_entity(e)
     link('P53', object_id, location_id)
     if e.srid_epsg == 32633 and e.x and e.y:
+        sql = """
+        INSERT INTO gis.point (name, entity_id, type, created, geom)
+        VALUES ('', %(entity_id)s, 'centerpoint', %(created)s,(
+            SELECT ST_SetSRID(ST_Transform(ST_GeomFromText('POINT({x} {y})',32633),4326),4326)
+        ))""".format(x=e.x, y=e.y)
+        cursor_dpp.execute(sql, {'entity_id': location_id, 'created': e.created})
+        count['Gis point'] += 1
+    count['E18 place'] += 1
+
+
+# Insert features
+
+sql_ = """
+    SELECT
+        uid, entity_name_uri, entity_type, entity_description, start_time_abs, srid_epsg,
+        end_time_abs, start_time_text, end_time_text, timestamp_creation, name_path,
+        x_lon_easting, y_lat_northing
+    FROM openatlas.features;"""
+cursor_ostalpen.execute(sql_)
+features = []
+for row in cursor_ostalpen.fetchall():
+    e = Entity()
+    e.created = row.timestamp_creation
+    e.ostalpen_id = row.uid
+    e.name = row.entity_name_uri
+    e.description = row.entity_description
+    e.start_time_text = row.start_time_text
+    e.start_time_abs = row.start_time_abs
+    e.srid_epsg = row.srid_epsg
+    e.x = row.x_lon_easting
+    e.y = row.y_lat_northing
+    features.append(e)
+
+for e in features:
+    if not e.name:
+        continue
+    e.class_code = 'E18'
+    e.system_type = 'feature'
+    object_id = insert_entity(e, with_case_study=True)
+    new_entities[e.ostalpen_id] = e
+    e.system_type = 'place location'
+    e.class_code = 'E53'
+    e.name = 'Location of ' + e.name
+    location_id = insert_entity(e)
+    link('P53', object_id, location_id)
+    if e.srid_epsg and e.x and e.y:
+        sql = """
+        INSERT INTO gis.point (name, entity_id, type, created, geom)
+        VALUES ('', %(entity_id)s, 'centerpoint', %(created)s,(
+            SELECT ST_SetSRID(ST_Transform(ST_GeomFromText('POINT({x} {y})',32633),4326),4326)
+        ))""".format(x=e.x, y=e.y)
+        cursor_dpp.execute(sql, {'entity_id': location_id, 'created': e.created})
+        count['Gis point'] += 1
+    count['E18 place'] += 1
+
+# Insert stratigraphic units
+
+sql_ = """
+    SELECT
+        uid, entity_name_uri, entity_type, entity_description, start_time_abs, srid_epsg,
+        end_time_abs, start_time_text, end_time_text, timestamp_creation, name_path,
+        x_lon_easting, y_lat_northing
+    FROM openatlas.stratigraphical_units;"""
+cursor_ostalpen.execute(sql_)
+strati = []
+for row in cursor_ostalpen.fetchall():
+    e = Entity()
+    e.created = row.timestamp_creation
+    e.ostalpen_id = row.uid
+    e.name = row.entity_name_uri
+    e.description = row.entity_description
+    e.start_time_text = row.start_time_text
+    e.start_time_abs = row.start_time_abs
+    e.srid_epsg = row.srid_epsg
+    e.x = row.x_lon_easting
+    e.y = row.y_lat_northing
+    strati.append(e)
+
+for e in strati:
+    if not e.name:
+        continue
+    e.class_code = 'E18'
+    e.system_type = 'stratigraphic_unit'
+    object_id = insert_entity(e, with_case_study=True)
+    new_entities[e.ostalpen_id] = e
+    e.system_type = 'place location'
+    e.class_code = 'E53'
+    e.name = 'Location of ' + e.name
+    location_id = insert_entity(e)
+    link('P53', object_id, location_id)
+    if e.srid_epsg and e.x and e.y:
+        sql = """
+        INSERT INTO gis.point (name, entity_id, type, created, geom)
+        VALUES ('', %(entity_id)s, 'centerpoint', %(created)s,(
+            SELECT ST_SetSRID(ST_Transform(ST_GeomFromText('POINT({x} {y})',32633),4326),4326)
+        ))""".format(x=e.x, y=e.y)
+        cursor_dpp.execute(sql, {'entity_id': location_id, 'created': e.created})
+        count['Gis point'] += 1
+    count['E18 place'] += 1
+
+
+# Insert finds
+
+sql_ = """
+    SELECT
+        uid, entity_name_uri, entity_type, entity_description, start_time_abs, srid_epsg,
+        end_time_abs, start_time_text, end_time_text, timestamp_creation, name_path,
+        x_lon_easting, y_lat_northing
+    FROM openatlas.finds;"""
+cursor_ostalpen.execute(sql_)
+finds = []
+for row in cursor_ostalpen.fetchall():
+    e = Entity()
+    e.created = row.timestamp_creation
+    e.ostalpen_id = row.uid
+    e.name = row.entity_name_uri
+    e.description = row.entity_description
+    e.start_time_text = row.start_time_text
+    e.start_time_abs = row.start_time_abs
+    e.srid_epsg = row.srid_epsg
+    e.x = row.x_lon_easting
+    e.y = row.y_lat_northing
+    finds.append(e)
+
+for e in finds:
+    if not e.name:
+        continue
+    e.class_code = 'E22'
+    e.system_type = 'find'
+    object_id = insert_entity(e, with_case_study=True)
+    new_entities[e.ostalpen_id] = e
+    e.system_type = 'place location'
+    e.class_code = 'E53'
+    e.name = 'Location of ' + e.name
+    location_id = insert_entity(e)
+    link('P53', object_id, location_id)
+    if e.srid_epsg and e.x and e.y:
         sql = """
         INSERT INTO gis.point (name, entity_id, type, created, geom)
         VALUES ('', %(entity_id)s, 'centerpoint', %(created)s,(
@@ -260,14 +401,23 @@ for row in cursor_ostalpen.fetchall():
         else:
             print('Error missing translation type, id: ' + str(domain.id) + ', ' + domain.id_name)
     elif row.links_cidoc_number_direction == 4:  # documents
-        # Todo: remove when all entites
+        # Todo: remove when all entities
         if row.links_entity_uid_to not in new_entities or \
                 row.links_entity_uid_from not in new_entities:
+                    # print('Missing source link for: ' + str(row.links_entity_uid_from))
                     continue
-        count['link'] += 1
         domain = new_entities[row.links_entity_uid_to]
         range_ = new_entities[row.links_entity_uid_from]
         link('P67', domain.id, range_.id ,row.links_annotation)
+        count['link'] += 1
+    elif row.links_cidoc_number_direction == 11:  # subunits
+        if row.links_entity_uid_to not in new_entities or \
+                row.links_entity_uid_from not in new_entities:
+                    print('Missing subunit link for: ' + str(row.links_entity_uid_from))
+                    continue
+        domain = new_entities[row.links_entity_uid_to]
+        range_ = new_entities[row.links_entity_uid_from]
+        link('P46', range_.id, domain.id, row.links_annotation)
 
 for name, count in count.items():
     print(name + ': ' + str(count))
