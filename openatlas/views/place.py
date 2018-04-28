@@ -151,7 +151,6 @@ def place_view(id_, unlink_id=None):
     stratigraphic_unit = None
     if object_.system_type == 'find':
         stratigraphic_unit = object_.get_linked_entity('P46', True)
-        print(stratigraphic_unit.id)
         feature = stratigraphic_unit.get_linked_entity('P46', True)
         place = feature.get_linked_entity('P46', True)
     elif object_.system_type == 'stratigraphic_unit':

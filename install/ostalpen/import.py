@@ -2,6 +2,7 @@ import os
 import subprocess
 import sys
 import time
+import copy
 
 import psycopg2.extras
 
@@ -227,10 +228,11 @@ for e in places:
     e.system_type = 'place'
     object_id = insert_entity(e, with_case_study=True)
     new_entities[e.ostalpen_id] = e
-    e.system_type = 'place location'
-    e.class_code = 'E53'
-    e.name = 'Location of ' + e.name
-    location_id = insert_entity(e)
+    p = copy.copy(e)
+    p.system_type = 'place location'
+    p.class_code = 'E53'
+    p.name = 'Location of ' + e.name
+    location_id = insert_entity(p)
     link('P53', object_id, location_id)
     if e.srid_epsg == 32633 and e.x and e.y:
         sql = """
@@ -273,10 +275,11 @@ for e in features:
     e.system_type = 'feature'
     object_id = insert_entity(e, with_case_study=True)
     new_entities[e.ostalpen_id] = e
-    e.system_type = 'place location'
-    e.class_code = 'E53'
-    e.name = 'Location of ' + e.name
-    location_id = insert_entity(e)
+    p = copy.copy(e)
+    p.system_type = 'place location'
+    p.class_code = 'E53'
+    p.name = 'Location of ' + p.name
+    location_id = insert_entity(p)
     link('P53', object_id, location_id)
     if e.srid_epsg and e.x and e.y:
         sql = """
@@ -318,9 +321,10 @@ for e in strati:
     e.system_type = 'stratigraphic_unit'
     object_id = insert_entity(e, with_case_study=True)
     new_entities[e.ostalpen_id] = e
-    e.system_type = 'place location'
-    e.class_code = 'E53'
-    e.name = 'Location of ' + e.name
+    p = copy.copy(e)
+    p.system_type = 'place location'
+    p.class_code = 'E53'
+    p.name = 'Location of ' + e.name
     location_id = insert_entity(e)
     link('P53', object_id, location_id)
     if e.srid_epsg and e.x and e.y:
@@ -364,10 +368,11 @@ for e in finds:
     e.system_type = 'find'
     object_id = insert_entity(e, with_case_study=True)
     new_entities[e.ostalpen_id] = e
-    e.system_type = 'place location'
-    e.class_code = 'E53'
-    e.name = 'Location of ' + e.name
-    location_id = insert_entity(e)
+    p = copy.copy(e)
+    p.system_type = 'place location'
+    p.class_code = 'E53'
+    p.name = 'Location of ' + e.name
+    location_id = insert_entity(p)
     link('P53', object_id, location_id)
     if e.srid_epsg and e.x and e.y:
         sql = """
