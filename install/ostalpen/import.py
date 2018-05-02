@@ -14,14 +14,14 @@ To do:
 
 Places:
 
- - feature, su, ... (check links)
- - dates
+- check links to from missing (Stefan mail)
+- dates (Stefan tries to clean up ostalpen dates)
+- types (Alex)
 
-
- - links to sources
- - other links
+- links to sources
+- other links
  
- - types
+- types
 
 After gis implementation:
 - split case studies
@@ -191,8 +191,8 @@ for e in entities:
         e.class_code = 'E8'
         insert_entity(e, with_case_study=True)
         count['E8 acquisition'] += 1
-    elif e.class_code in ['E18', 'E53']:
-        continue # place will be added later
+    elif e.class_code in ['E018', 'E053']:
+        continue # place will be added later in script
     else:
         missing_classes[e.class_code] = e.class_code
         continue
@@ -416,10 +416,12 @@ for row in cursor_ostalpen.fetchall():
         link('P67', domain.id, range_.id ,row.links_annotation)
         count['link'] += 1
     elif row.links_cidoc_number_direction == 11:  # subunits
-        if row.links_entity_uid_to not in new_entities or \
-                row.links_entity_uid_from not in new_entities:
-                    print('Missing subunit link for: ' + str(row.links_entity_uid_from))
-                    continue
+        if row.links_entity_uid_to not in new_entities:
+            # print('Missing subunit for a link (11, to) for: ' + str(row.links_entity_uid_to))
+            continue
+        if row.links_entity_uid_from not in new_entities:
+            # print('Missing subunit for a link (11, from) for: ' + str(row.links_entity_uid_from))
+            continue
         domain = new_entities[row.links_entity_uid_to]
         range_ = new_entities[row.links_entity_uid_from]
         link('P46', range_.id, domain.id, row.links_annotation)
