@@ -12,6 +12,8 @@ sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 """
 To do:
 
+- split case studies?
+
 Places:
 
 - check links to from missing (Stefan mail)
@@ -23,8 +25,9 @@ Places:
  
 - types
 
-After gis implementation:
-- split case studies
+Clean up:
+- if subunit has same gis as above delete gis of subunit
+- links between subunits have sometimes description texts which are not visible in new system (e.g. postion of find)
 
 """
 
@@ -120,6 +123,17 @@ sql_ = """
     COMMENT ON COLUMN model.entity.ostalpen_id IS 'uid of former Ostalpen table tbl_entities';"""
 cursor_dpp.execute(sql_)
 
+# Add subunit types
+sql = """
+INSERT INTO entity (class_code, name, description) VALUES ('E55', 'Bibliography', 'Categories for bibliographical entries as used for example in BibTeX, e.g. Book, Inbook, Article etc.');
+INSERT INTO entity (class_code, name) VALUES ('E55', 'Inbook'), ('E55', 'Article'), ('E55', 'Book');
+INSERT INTO link (property_code, range_id, domain_id) VALUES
+('P127', (SELECT id FROM entity WHERE name='Bibliography'), (SELECT id FROM entity WHERE name='Inbook')),
+('P127', (SELECT id FROM entity WHERE name='Bibliography'), (SELECT id FROM entity WHERE name='Article')),
+('P127', (SELECT id FROM entity WHERE name='Bibliography'), (SELECT id FROM entity WHERE name='Book'));"""
+
+
+
 # Set counters
 new_entities = {}
 missing_classes = {}
@@ -136,11 +150,21 @@ count = {
 
 # Get DPP types
 types = {}
+types_double = {}
 cursor_dpp.execute("SELECT id, name FROM model.entity WHERE class_code = 'E55';")
 for row in cursor_dpp.fetchall():
     if row.name in types:
-        print('Warning - double type entry for: ' + row.name)
+        types_double[row.name] = row.id
     types[row.name] = row.id
+
+# Get Ostalpen types
+ostalpen_types = {}
+ostalpen_types_double = {}
+cursor_ostalpen.execute("SELECT uid, entity_name_uri FROM openatlas.tbl_entities WHERE classes_uid = 13;")
+for row in cursor_ostalpen.fetchall():
+    if row.entity_name_uri in ostalpen_types:
+        ostalpen_types_double[row.uid] = row.entity_name_uri
+    ostalpen_types[row.uid] = row.entity_name_uri
 
 # Get ostalpen entities
 sql_ = """
@@ -199,7 +223,6 @@ for e in entities:
     new_entities[e.ostalpen_id] = e
 
 # Insert places
-
 sql_ = """
     SELECT
         uid, entity_name_uri, entity_type, entity_description, start_time_abs, srid_epsg,
@@ -246,7 +269,6 @@ for e in places:
 
 
 # Insert features
-
 sql_ = """
     SELECT
         uid, entity_name_uri, entity_type, entity_description, start_time_abs, srid_epsg,
@@ -292,7 +314,6 @@ for e in features:
     count['E18 place'] += 1
 
 # Insert stratigraphic units
-
 sql_ = """
     SELECT
         uid, entity_name_uri, entity_type, entity_description, start_time_abs, srid_epsg,
@@ -339,7 +360,6 @@ for e in strati:
 
 
 # Insert finds
-
 sql_ = """
     SELECT
         uid, entity_name_uri, entity_type, entity_description, start_time_abs, srid_epsg,
@@ -384,7 +404,9 @@ for e in finds:
         count['Gis point'] += 1
     count['E18 place'] += 1
 
+
 # Get links in DPP
+missing_properties = set()
 sql_ = """
     SELECT links_uid, links_entity_uid_from, links_cidoc_number_direction, links_entity_uid_to,
         links_annotation, links_creator, links_timestamp_start, links_timestamp_end,
@@ -425,11 +447,35 @@ for row in cursor_ostalpen.fetchall():
         domain = new_entities[row.links_entity_uid_to]
         range_ = new_entities[row.links_entity_uid_from]
         link('P46', range_.id, domain.id, row.links_annotation)
+    elif row.links_cidoc_number_direction == 1:  # types
+        if row.links_entity_uid_to not in ostalpen_types:
+            print('Invalid type link to : ' + str(row.links_entity_uid_to))
+            continue
+        type_name = ostalpen_types[row.links_entity_uid_to]
+        if row.links_entity_uid_to in ostalpen_types_double:
+            print('Double Ostalpen type: ' + type_name)
+            continue
+        if type_name in types_double:
+            print('Use of DPP double type: ' + type_name)
+            continue
+        if type_name not in types:
+            print('Missing DPP type: ' + type_name)
+            continue
+        if row.links_entity_uid_from not in new_entities:
+            print('Missing entity for type with Ostalpen ID: ' + str(row.links_entity_uid_from))
+            continue
+        domain = new_entities[row.links_entity_uid_from]
+        link('P2', domain.id, types[type_name])
+        count['link'] += 1
+    else:
+        missing_properties.add(row.links_cidoc_number_direction)
 
 for name, count in count.items():
-    print(name + ': ' + str(count))
+    print(str(name) + ': ' + str(count))
 
 print('Missing classes:' + ', '.join(missing_classes))
+print('Missing property ids:')
+print(missing_properties)
 connection_dpp.close()
 connection_ostalpen.close()
 print('Execution time: ' + str(int(time.time() - start)) + ' seconds')
