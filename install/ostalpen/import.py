@@ -176,11 +176,13 @@ sql_ = """
 cursor_ostalpen.execute(sql_)
 entities = []
 for row in cursor_ostalpen.fetchall():
+    if not row.entity_name_uri:
+        continue
     e = Entity()
     e.created = row.timestamp_creation
     e.id_name = row.entity_id
     e.ostalpen_id = row.uid
-    e.name = row.entity_name_uri
+    e.name = row.entity_name_uri.replace('\n', ' ').replace('\r', ' ')
     e.description = row.entity_description
     e.class_code = row.cidoc_class_nr
     e.start_time_text = row.start_time_text
@@ -189,8 +191,6 @@ for row in cursor_ostalpen.fetchall():
 
 # Insert entities in DPP
 for e in entities:
-    if not e.name:
-        continue
     if e.class_code == 'E021':  # Person
         e.class_code = 'E21'
         insert_entity(e, with_case_study=True)
@@ -232,10 +232,12 @@ sql_ = """
 cursor_ostalpen.execute(sql_)
 places = []
 for row in cursor_ostalpen.fetchall():
+    if not row.entity_name_uri:
+        continue
     e = Entity()
     e.created = row.timestamp_creation
     e.ostalpen_id = row.uid
-    e.name = row.entity_name_uri
+    e.name = row.entity_name_uri.replace('\n', ' ').replace('\r', ' ')
     e.description = row.entity_description
     e.start_time_text = row.start_time_text
     e.start_time_abs = row.start_time_abs
@@ -245,8 +247,6 @@ for row in cursor_ostalpen.fetchall():
     places.append(e)
 
 for e in places:
-    if not e.name:
-        continue
     e.class_code = 'E18'
     e.system_type = 'place'
     object_id = insert_entity(e, with_case_study=True)
@@ -278,10 +278,12 @@ sql_ = """
 cursor_ostalpen.execute(sql_)
 features = []
 for row in cursor_ostalpen.fetchall():
+    if not row.entity_name_uri:
+        continue
     e = Entity()
     e.created = row.timestamp_creation
     e.ostalpen_id = row.uid
-    e.name = row.entity_name_uri
+    e.name = row.entity_name_uri.replace('\n', ' ').replace('\r', ' ')
     e.description = row.entity_description
     e.start_time_text = row.start_time_text
     e.start_time_abs = row.start_time_abs
@@ -291,8 +293,6 @@ for row in cursor_ostalpen.fetchall():
     features.append(e)
 
 for e in features:
-    if not e.name:
-        continue
     e.class_code = 'E18'
     e.system_type = 'feature'
     object_id = insert_entity(e, with_case_study=True)
@@ -323,10 +323,12 @@ sql_ = """
 cursor_ostalpen.execute(sql_)
 strati = []
 for row in cursor_ostalpen.fetchall():
+    if not row.entity_name_uri:
+        continue
     e = Entity()
     e.created = row.timestamp_creation
     e.ostalpen_id = row.uid
-    e.name = row.entity_name_uri
+    e.name = row.entity_name_uri.replace('\n', ' ').replace('\r', ' ')
     e.description = row.entity_description
     e.start_time_text = row.start_time_text
     e.start_time_abs = row.start_time_abs
@@ -336,8 +338,6 @@ for row in cursor_ostalpen.fetchall():
     strati.append(e)
 
 for e in strati:
-    if not e.name:
-        continue
     e.class_code = 'E18'
     e.system_type = 'stratigraphic_unit'
     object_id = insert_entity(e, with_case_study=True)
@@ -369,10 +369,12 @@ sql_ = """
 cursor_ostalpen.execute(sql_)
 finds = []
 for row in cursor_ostalpen.fetchall():
+    if not row.entity_name_uri:
+        continue
     e = Entity()
     e.created = row.timestamp_creation
     e.ostalpen_id = row.uid
-    e.name = row.entity_name_uri
+    e.name = row.entity_name_uri.replace('\n', ' ').replace('\r', ' ')
     e.description = row.entity_description
     e.start_time_text = row.start_time_text
     e.start_time_abs = row.start_time_abs
@@ -382,8 +384,6 @@ for row in cursor_ostalpen.fetchall():
     finds.append(e)
 
 for e in finds:
-    if not e.name:
-        continue
     e.class_code = 'E22'
     e.system_type = 'find'
     object_id = insert_entity(e, with_case_study=True)
