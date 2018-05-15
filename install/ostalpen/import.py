@@ -12,22 +12,26 @@ sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 """
 To do:
 
-- split case studies?
+add time to printout
+e031 - check system type (not existing)
+
+e040 - legal body
+http://127.0.0.1:5000/place/view/25859
 
 Places:
-
-- check links to from missing (Stefan mail)
-- dates (Stefan tries to clean up ostalpen dates)
-- types (Alex)
-
 - links to sources
 - other links
- 
-- types
+
+Types: 
+- add translated arch types
+- Material E019 to type material
+- Right E30 to type licence
 
 Clean up:
 - if subunit has same gis as above delete gis of subunit
 - links between subunits have sometimes description texts which are not visible in new system (e.g. postion of find)
+- split case studies?
+- check CIDOC valid
 
 """
 
@@ -132,8 +136,6 @@ INSERT INTO link (property_code, range_id, domain_id) VALUES
 ('P127', (SELECT id FROM entity WHERE name='Bibliography'), (SELECT id FROM entity WHERE name='Article')),
 ('P127', (SELECT id FROM entity WHERE name='Bibliography'), (SELECT id FROM entity WHERE name='Book'));"""
 
-
-
 # Set counters
 new_entities = {}
 missing_classes = {}
@@ -141,10 +143,12 @@ count = {
     'Gis point': 0,
     'E21 person': 0,
     'E18 place': 0,
+    'E31 document': 0,
     'E33 source': 0,
     'E33 translation': 0,
     'E33 original text': 0,
     'E74 group': 0,
+    'E7 event': 0,
     'E8 acquisition': 0,
     'link': 0}
 
@@ -179,6 +183,7 @@ for row in cursor_ostalpen.fetchall():
     if not row.entity_name_uri:
         continue
     e = Entity()
+    e.entity_type = row.entity_type
     e.created = row.timestamp_creation
     e.id_name = row.entity_id
     e.ostalpen_id = row.uid
@@ -189,11 +194,11 @@ for row in cursor_ostalpen.fetchall():
     e.start_time_abs = row.start_time_abs
     entities.append(e)
 
-# Insert entities in DPP
+print('Entities')
 for e in entities:
+    with_case_study = True
     if e.class_code == 'E021':  # Person
         e.class_code = 'E21'
-        insert_entity(e, with_case_study=True)
         count['E21 person'] += 1
     elif e.class_code == 'E033':  # Linguistic Object (Source)
         if e.id_name.startswith('tbl_2_quelle_original'):
@@ -206,23 +211,37 @@ for e in entities:
             e.system_type = 'source content'
             count['E33 source'] += 1
         e.class_code = 'E33'
-        insert_entity(e, with_case_study=True if e.system_type == 'source content' else False)
+        with_case_study = True if e.system_type == 'source content' else False
     elif e.class_code == 'E074':  # Group
         e.class_code = 'E74'
-        insert_entity(e, with_case_study=True)
         count['E74 group'] += 1
+    elif e.class_code == 'E005':  # Event
+        e.class_code = 'E7'
+        count['E7 event'] += 1
     elif e.class_code == 'E008':  # Acquisition
         e.class_code = 'E8'
-        insert_entity(e, with_case_study=True)
         count['E8 acquisition'] += 1
-    elif e.class_code in ['E018', 'E053']:
+    elif e.class_code == 'E031':
+        e.class_code = 'E31'
+        if e.entity_type in ['10', '11']:  # Scientific Literature, text
+            e.system_type = 'bibliography'
+        elif e.entity_type in ['11232', '11179', '11180']:  # File (map, photo, drawing)
+            if '.' not in e.name:
+                print('Skipping bogus file ' + e.name)
+                continue
+            e.system_type = 'file'
+        elif e.entity_type == '12':  # these 23 have to be checked manually
+            continue
+        count['E31 document'] += 1
+    elif e.class_code in ['E018', 'E053', 'E055', 'E052', 'E004']:
         continue # place will be added later in script
     else:
         missing_classes[e.class_code] = e.class_code
         continue
+    insert_entity(e, with_case_study=with_case_study)
     new_entities[e.ostalpen_id] = e
 
-# Insert places
+print('Places')
 sql_ = """
     SELECT
         uid, entity_name_uri, entity_type, entity_description, start_time_abs, srid_epsg,
@@ -268,7 +287,7 @@ for e in places:
     count['E18 place'] += 1
 
 
-# Insert features
+print('Features')
 sql_ = """
     SELECT
         uid, entity_name_uri, entity_type, entity_description, start_time_abs, srid_epsg,
@@ -313,7 +332,7 @@ for e in features:
         count['Gis point'] += 1
     count['E18 place'] += 1
 
-# Insert stratigraphic units
+print('Stratigraphic units')
 sql_ = """
     SELECT
         uid, entity_name_uri, entity_type, entity_description, start_time_abs, srid_epsg,
@@ -359,7 +378,7 @@ for e in strati:
     count['E18 place'] += 1
 
 
-# Insert finds
+print('Finds')
 sql_ = """
     SELECT
         uid, entity_name_uri, entity_type, entity_description, start_time_abs, srid_epsg,
@@ -405,7 +424,7 @@ for e in finds:
     count['E18 place'] += 1
 
 
-# Get links in DPP
+print('Links')
 missing_properties = set()
 sql_ = """
     SELECT links_uid, links_entity_uid_from, links_cidoc_number_direction, links_entity_uid_to,
@@ -449,7 +468,7 @@ for row in cursor_ostalpen.fetchall():
         link('P46', range_.id, domain.id, row.links_annotation)
     elif row.links_cidoc_number_direction == 1:  # types
         if row.links_entity_uid_to not in ostalpen_types:
-            print('Invalid type link to : ' + str(row.links_entity_uid_to))
+            # print('Invalid type link to : ' + str(row.links_entity_uid_to))
             continue
         type_name = ostalpen_types[row.links_entity_uid_to]
         if row.links_entity_uid_to in ostalpen_types_double:
@@ -459,7 +478,7 @@ for row in cursor_ostalpen.fetchall():
             print('Use of DPP double type: ' + type_name)
             continue
         if type_name not in types:
-            print('Missing DPP type: ' + type_name)
+            # print('Missing DPP type: ' + type_name)
             continue
         if row.links_entity_uid_from not in new_entities:
             print('Missing entity for type with Ostalpen ID: ' + str(row.links_entity_uid_from))
