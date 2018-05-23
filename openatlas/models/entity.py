@@ -1,5 +1,4 @@
 # Created by Alexander Watzinger and others. Please see README.md for licensing information
-import ast
 from collections import OrderedDict
 
 from flask import g
@@ -18,12 +17,12 @@ class Entity:
             logger.log('error', 'model', 'invalid id')
             abort(418)
         self.id = row.id
-        self.nodes = []
+        self.nodes = dict()
         if hasattr(row, 'types') and row.types:
-            nodes_list = ast.literal_eval('[' + row.types + ']')
-            # converting nodes_list to set, to list to avoid duplicates (from the sql statement)
-            for node_id in list(set(nodes_list)):
-                self.nodes.append(g.nodes[node_id])
+            for node in row.types:
+                if not node['f1']:
+                    continue
+                self.nodes[g.nodes[node['f1']]] = node['f2']
         self.name = row.name
         self.root = None
         self.description = row.description if row.description else ''
@@ -100,7 +99,7 @@ class EntityMapper:
         SELECT
             e.id, e.class_code, e.name, e.description, e.created, e.modified,
             e.value_integer, e.system_type,
-            string_agg(CAST(t.range_id AS text), ',') AS types,
+            array_to_json(array_agg((t.range_id, t.description))) as types,
             min(date_part('year', d1.value_timestamp)) AS first,
             max(date_part('year', d2.value_timestamp)) AS last
 

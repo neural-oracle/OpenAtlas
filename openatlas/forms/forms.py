@@ -4,12 +4,12 @@ import time
 
 from flask import g
 from flask_babel import lazy_gettext as _
-from wtforms import HiddenField
+from wtforms import HiddenField, StringField
 from wtforms.widgets import HiddenInput
 
 from openatlas import app
 from openatlas.forms.date import DateForm
-from openatlas.models.entity import Entity, EntityMapper
+from openatlas.models.entity import EntityMapper
 from openatlas.models.node import NodeMapper
 from openatlas.util.util import get_base_table_data, pager, truncate_string, uc_first
 
@@ -18,10 +18,21 @@ def build_form(form, form_name, entity=None, request_origin=None, entity2=None):
     # Todo: write comment, reflect that entity can be a link
     # Add custom fields
     custom_list = []
+
+    def add_value_type_fields(subs):
+        for sub_id in subs:
+            sub = g.nodes[sub_id]
+            setattr(form, 'value_list-' + str(sub.id), StringField(sub.name))
+            add_value_type_fields(sub.subs)
+
     for id_, node in NodeMapper.get_nodes_for_form(form_name).items():
         custom_list.append(id_)
         setattr(form, str(id_), TreeMultiField(str(id_)) if node.multiple else TreeField(str(id_)))
+        if node.value_type:
+            add_value_type_fields(node.subs)
+
     form_instance = form(obj=entity)
+
     # Delete custom fields except the ones specified for the form
     delete_list = []  # Can't delete fields in the loop so creating a list for later deletion
     for field in form_instance:
@@ -34,18 +45,19 @@ def build_form(form, form_name, entity=None, request_origin=None, entity2=None):
     if entity and request_origin and request_origin.method == 'GET':
         if isinstance(form_instance, DateForm):
             form_instance.populate_dates(entity)
+        nodes = entity.nodes
+        if entity2:
+            nodes.update(entity2.nodes)
+        if hasattr(form, 'opened'):
+            form_instance.opened.data = time.time()
         node_data = {}
-        if isinstance(entity, Entity):
-            nodes = entity.nodes + (entity2.nodes if entity2 else [])
-            if hasattr(form, 'opened'):
-                form_instance.opened.data = time.time()
-        else:
-            nodes = [entity.type] if entity.type else []  # It's a link so use the link.type
-        for node in nodes:
+        for node, node_value in nodes.items():
             root = g.nodes[node.root[-1]] if node.root else node
-            if root.id not in node_data:  # Append only non root nodes
+            if root.id not in node_data:
                 node_data[root.id] = []
             node_data[root.id].append(node.id)
+            if root.value_type:
+                getattr(form_instance, 'value_list-' + str(node.id)).data = node_value
         for root_id, nodes in node_data.items():
             if hasattr(form_instance, str(root_id)):
                 getattr(form_instance, str(root_id)).data = nodes
@@ -98,6 +110,7 @@ class TreeSelect(HiddenInput):
             hierarchy_id = int(field.id)
         except ValueError:
             hierarchy_id = NodeMapper.get_hierarchy_by_name(uc_first(field.id)).id
+        root = g.nodes[hierarchy_id]
         html = """
             <input id="{name}-button" name="{name}-button" type="text"
                 class="table-select {required}" onfocus="this.blur()"
@@ -112,9 +125,9 @@ class TreeSelect(HiddenInput):
             </div>
             <script>
                 $(document).ready(function () {{
-                    createOverlay("{name}","{title}");
+                    createOverlay("{name}","{title}",false,{value_type});
                     $("#{name}-tree").jstree({{
-                        "core" : {{"check_callback" : true, 'data':[{tree_data}] }},
+                        "core" : {{"check_callback" : true, 'data':[{tree_data}]}},
                         "search": {{"case_insensitive": true, "show_only_matches": true}},
                         "plugins" : ["search"],
                     }});
@@ -127,7 +140,8 @@ class TreeSelect(HiddenInput):
                 }});
             </script>""".format(
             name=field.id,
-            title=g.nodes[hierarchy_id].name,
+            title=root.name,
+            value_type='true' if root.value_type else 'false',
             change_label=uc_first(_('change')),
             clear_label=uc_first(_('clear')),
             selection=selection,
@@ -146,12 +160,16 @@ class TreeMultiSelect(HiddenInput):
     def __call__(self, field, **kwargs):
         selection = ''
         selected_ids = []
+        root = g.nodes[int(field.id)]
         if field.data:
+            print('my data' + str(field.data))
             if isinstance(field.data, str):
                 field.data = ast.literal_eval(field.data)
             for entity_id in field.data:
-                selected_ids.append(entity_id)
-                selection += g.nodes[entity_id].name + '<br />'
+                entity = g.nodes[entity_id]
+                selected_ids.append(entity.id)
+                if not root.value_type:
+                    selection += g.nodes[entity_id].name + '<br />'
         html = """
             <span id="{name}-button" class="button">{change_label}</span>
             <div id="{name}-selection" style="text-align:left;">{selection}</div>
@@ -162,7 +180,7 @@ class TreeMultiSelect(HiddenInput):
                </div>
             </div>
             <script>
-                createOverlay("{name}", "{title}", true, "tree");
+                createOverlay("{name}", "{title}", true, "tree", {value_type});
                 $("#{name}-tree").jstree({{
                     "core" : {{ "check_callback" : true, 'data':[{tree_data}] }},
                     "search": {{"case_insensitive": true, "show_only_matches": true}},
@@ -174,7 +192,8 @@ class TreeMultiSelect(HiddenInput):
                 }});
             </script>""".format(
             name=field.id,
-            title=g.nodes[int(field.id)].name,
+            value_type='true' if root.value_type else 'false',
+            title=root.name,
             selection=selection,
             change_label=uc_first(_('change')),
             tree_data=NodeMapper.get_tree_data(int(field.id), selected_ids))
