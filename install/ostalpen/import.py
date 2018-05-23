@@ -136,6 +136,18 @@ INSERT INTO link (property_code, range_id, domain_id) VALUES
 ('P127', (SELECT id FROM entity WHERE name='Bibliography'), (SELECT id FROM entity WHERE name='Article')),
 ('P127', (SELECT id FROM entity WHERE name='Bibliography'), (SELECT id FROM entity WHERE name='Book'));"""
 
+# Add value types
+sql = """
+INSERT INTO entity (class_code, name, description) VALUES ('E55', 'Dimensions', 'Physical dimensions like weight, height and so on.');
+INSERT INTO entity (class_code, name) VALUES ('E55', 'Height'), ('E55', 'Weight');
+INSERT INTO link (property_code, range_id, domain_id) VALUES
+('P127', (SELECT id FROM entity WHERE name='Dimensions'), (SELECT id FROM entity WHERE name='Height')),
+('P127', (SELECT id FROM entity WHERE name='Dimensions'), (SELECT id FROM entity WHERE name='Weight'));
+INSERT INTO web.hierarchy (id, name, value_type) VALUES ((SELECT id FROM entity WHERE name='Dimensions'), 'Dimensions', True);
+INSERT INTO web.hierarchy_form (hierarchy_id, form_id) VALUES ((SELECT id FROM web.hierarchy WHERE name LIKE 'Dimensions'),(SELECT id FROM web.form WHERE name LIKE 'Find'));
+"""
+cursor_dpp.execute(sql_)
+
 # Set counters
 new_entities = {}
 missing_classes = {}
