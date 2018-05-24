@@ -149,14 +149,12 @@ INSERT INTO link (property_code, range_id, domain_id) VALUES
 
 # Add value types
 sql = """
-INSERT INTO model.entity (class_code, name, description) VALUES ('E55', 'Dimensions', 'Physical dimensions like weight, height and so on.');
+
 INSERT INTO model.entity (class_code, name, description) VALUES 
     ('E55', 'Width', 'In centimeters'),
     ('E55', 'Length', 'In centimeters'),
-    ('E55', 'Height', 'In centimeters'),
     ('E55', 'Thickness', 'In centimeters'),
     ('E55', 'Diameter', 'In centimeters'),
-    ('E55', 'Weight', 'In gram'),
     ('E55', 'Degrees', '360° for full circle');
 INSERT INTO model.link (property_code, range_id, domain_id) VALUES
 ('P127', (SELECT id FROM model.entity WHERE name='Dimensions'), (SELECT id FROM model.entity WHERE name='Width')),
@@ -166,10 +164,7 @@ INSERT INTO model.link (property_code, range_id, domain_id) VALUES
 ('P127', (SELECT id FROM model.entity WHERE name='Dimensions'), (SELECT id FROM model.entity WHERE name='Diameter')),
 ('P127', (SELECT id FROM model.entity WHERE name='Dimensions'), (SELECT id FROM model.entity WHERE name='Weight')),
 ('P127', (SELECT id FROM model.entity WHERE name='Dimensions'), (SELECT id FROM model.entity WHERE name='Degrees'));
-INSERT INTO web.hierarchy (id, name, value_type) VALUES ((SELECT id FROM model.entity WHERE name='Dimensions'), 'Dimensions', True);
-INSERT INTO web.hierarchy_form (hierarchy_id, form_id) VALUES 
-((SELECT id FROM web.hierarchy WHERE name LIKE 'Dimensions'),(SELECT id FROM web.form WHERE name LIKE 'Find')),
-((SELECT id FROM web.hierarchy WHERE name LIKE 'Dimensions'),(SELECT id FROM web.form WHERE name LIKE 'Stratigraphic Unit'));
+INSERT INTO web.hierarchy_form (hierarchy_id, form_id) VALUES ((SELECT id FROM web.hierarchy WHERE name LIKE 'Dimensions'),(SELECT id FROM web.form WHERE name LIKE 'Stratigraphic Unit'));
 """
 cursor_dpp.execute(sql)
 
