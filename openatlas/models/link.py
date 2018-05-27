@@ -45,28 +45,29 @@ class LinkMapper:
         for range_ in range_:
             domain_id = domain if isinstance(domain, int) else domain.id
             range_id = range_ if isinstance(range_, int) else range_.id
-            if 'settings' in session and session['settings']['debug_mode']:  # pragma: no cover
-                from openatlas.models.entity import EntityMapper
-                domain = domain if not isinstance(domain, int) else EntityMapper.get_by_id(domain)
-                range_ = range_ if not isinstance(range_, int) else EntityMapper.get_by_id(range_)
-                domain_class = g.classes[domain.class_.code]
-                range_class = g.classes[range_.class_.code]
-                property_ = g.properties[property_code]
-                ignore = app.config['WHITELISTED_DOMAINS']
-                domain_error = True
-                range_error = True
-                if property_.find_object('domain_class_code', domain_class.code):
-                    domain_error = False
-                if domain_class.code in ignore:
-                    domain_error = False
-                if property_.find_object('range_class_code', range_class.code):
-                    range_error = False
-                if domain_error or range_error:
-                    text = _('error link') + ': ' + domain_class.code + ' > '
-                    text += property_code + ' > ' + range_class.code
-                    logger.log('error', 'model', text)
-                    flash(text, 'error')
-                    continue
+            # Commented if below because unsure if link testing in debug mode only is a good idea
+            # if 'settings' in session and session['settings']['debug_mode']:
+            from openatlas.models.entity import EntityMapper
+            domain = domain if not isinstance(domain, int) else EntityMapper.get_by_id(domain)
+            range_ = range_ if not isinstance(range_, int) else EntityMapper.get_by_id(range_)
+            domain_class = g.classes[domain.class_.code]
+            range_class = g.classes[range_.class_.code]
+            property_ = g.properties[property_code]
+            ignore = app.config['WHITELISTED_DOMAINS']
+            domain_error = True
+            range_error = True
+            if property_.find_object('domain_class_code', domain_class.code):
+                domain_error = False
+            if domain_class.code in ignore:
+                domain_error = False
+            if property_.find_object('range_class_code', range_class.code):
+                range_error = False
+            if domain_error or range_error:
+                text = _('error link') + ': ' + domain_class.code + ' > '
+                text += property_code + ' > ' + range_class.code
+                logger.log('error', 'model', text)
+                flash(text, 'error')
+                continue
             sql = """
                 INSERT INTO model.link (property_code, domain_id, range_id, description)
                 VALUES (%(property_code)s, %(domain_id)s, %(range_id)s, %(description)s)
@@ -184,3 +185,31 @@ class LinkMapper:
             'range_id': link.range.id,
             'description': link.description})
         debug_model['div sql'] += 1
+
+    @staticmethod
+    def check_links():
+        from openatlas.util.util import link
+        sql = """SELECT id, property_code, domain_id, range_id, description, created, modified
+                FROM model.link;"""
+        g.cursor.execute(sql)
+        # Todo: merge with link checker in model and links
+        invalid_links = []
+        for row in g.cursor.fetchall():
+            from openatlas.models.entity import EntityMapper
+            domain = EntityMapper.get_by_id(row.domain_id)
+            range_ = EntityMapper.get_by_id(row.range_id)
+            domain_class = g.classes[domain.class_.code]
+            range_class = g.classes[range_.class_.code]
+            property_ = g.properties[row.property_code]
+            domain_is_valid = property_.find_object('domain_class_code', domain_class.code)
+            range_is_valid = property_.find_object('range_class_code', range_class.code)
+            ignore = app.config['WHITELISTED_DOMAINS']
+            test_result = {
+                'domain_error': False if domain_is_valid or domain_class.code in ignore else True,
+                'range_error': False if range_is_valid else True}
+            if test_result['domain_error'] or test_result['range_error']:  # pragma: no cover
+                invalid_links.append({
+                    'domain': link(domain) + ' (' + domain.class_.code + ')',
+                    'property': link(property_),
+                    'range': link(range_) + ' (' + range_.class_.code + ')'})
+        return invalid_links
