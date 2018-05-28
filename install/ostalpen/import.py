@@ -123,12 +123,13 @@ def insert_entity(entity, with_case_study=False):
             VALUES (%(property_code)s, %(domain_id)s, %(range_id)s);"""
         cursor_dpp.execute(sql, {
             'property_code': 'P2', 'domain_id': entity.id, 'range_id': ostalpen_type_id})
-    for dim_label, dim_value in e.dim.items():
-        if dim_value:
-            sql = """
-                INSERT INTO model.link (property_code, domain_id, range_id, description)
-                VALUES ('P2', %(domain_id)s, (SELECT id FROM model.entity WHERE name = %(dim_label)s) AND class_code = 'E55'), %(dim_value)s);"""
-            cursor_dpp.execute(sql, {'domain_id': entity.id, 'dim_label': dim_label, 'dim_value': dim_value})
+    if e.class_code != 'E53':
+        for dim_label, dim_value in e.dim.items():
+            if dim_value:
+                sql = """
+                    INSERT INTO model.link (property_code, domain_id, range_id, description)
+                    VALUES ('P2', %(domain_id)s, (SELECT id FROM model.entity WHERE name = %(dim_label)s AND class_code = 'E55'), %(dim_value)s);"""
+                cursor_dpp.execute(sql, {'domain_id': entity.id, 'dim_label': dim_label, 'dim_value': dim_value})
     return entity.id
 
 
@@ -211,8 +212,7 @@ sql_ = """
     SELECT
         uid, entity_name_uri, cidoc_class_nr, entity_type, entity_description, start_time_abs,
         end_time_abs, start_time_text, end_time_text, timestamp_creation, entity_id,
-        dim_width, dim_length, dim_height, dim_thickness, dim_diameter, dim_units, dim_weight,
-        dim_units_weight, dim_degrees
+        dim_width, dim_length, dim_height, dim_thickness, dim_diameter, dim_weight, dim_degrees
     FROM openatlas.tbl_entities e
     JOIN openatlas.tbl_classes c ON e.classes_uid = c.tbl_classes_uid;"""
 cursor_ostalpen.execute(sql_)
@@ -269,14 +269,17 @@ for e in entities:
         count['E8 acquisition'] += 1
     elif e.class_code == 'E031':
         e.class_code = 'E31'
-        if e.entity_type in ['10', '11']:  # Scientific Literature, text
+        if e.entity_type in [10, 11]:  # Scientific Literature, text
             e.system_type = 'bibliography'
-        elif e.entity_type in ['11232', '11179', '11180']:  # File (map, photo, drawing)
+        elif e.entity_type in [11232, 11179, 11180]:  # File (map, photo, drawing)
             if '.' not in e.name:
                 print('Skipping bogus file ' + e.name)
                 continue
             e.system_type = 'file'
-        elif e.entity_type == '12':  # these 23 have to be checked manually
+        elif e.entity_type == 12:  # these 23 have to be checked manually
+            continue
+        else:
+            print('missing id for E031 type:' + str(e.entity_type))
             continue
         count['E31 document'] += 1
     elif e.class_code in ['E018', 'E053', 'E055', 'E052', 'E004']:
@@ -292,7 +295,8 @@ sql_ = """
     SELECT
         uid, entity_name_uri, entity_type, entity_description, start_time_abs, srid_epsg,
         end_time_abs, start_time_text, end_time_text, timestamp_creation, name_path,
-        x_lon_easting, y_lat_northing
+        x_lon_easting, y_lat_northing,
+        dim_width, dim_length, dim_height, dim_thickness, dim_diameter, dim_degrees
     FROM openatlas.sites;"""
 cursor_ostalpen.execute(sql_)
 places = []
@@ -309,6 +313,13 @@ for row in cursor_ostalpen.fetchall():
     e.srid_epsg = row.srid_epsg
     e.x = row.x_lon_easting
     e.y = row.y_lat_northing
+    e.dim = {
+        'Width': row.dim_width,
+        'Length': row.dim_length,
+        'Height': row.dim_height,
+        'Thickness': row.dim_thickness,
+        'Diameter': row.dim_diameter,
+        'Degrees': row.dim_degrees}
     places.append(e)
 
 for e in places:
@@ -338,7 +349,8 @@ sql_ = """
     SELECT
         uid, entity_name_uri, entity_type, entity_description, start_time_abs, srid_epsg,
         end_time_abs, start_time_text, end_time_text, timestamp_creation, name_path,
-        x_lon_easting, y_lat_northing
+        x_lon_easting, y_lat_northing,
+        dim_width, dim_length, dim_height, dim_thickness, dim_diameter, dim_degrees
     FROM openatlas.features;"""
 cursor_ostalpen.execute(sql_)
 features = []
@@ -355,6 +367,13 @@ for row in cursor_ostalpen.fetchall():
     e.srid_epsg = row.srid_epsg
     e.x = row.x_lon_easting
     e.y = row.y_lat_northing
+    e.dim = {
+        'Width': row.dim_width,
+        'Length': row.dim_length,
+        'Height': row.dim_height,
+        'Thickness': row.dim_thickness,
+        'Diameter': row.dim_diameter,
+        'Degrees': row.dim_degrees}
     features.append(e)
 
 for e in features:
@@ -383,7 +402,8 @@ sql_ = """
     SELECT
         uid, entity_name_uri, entity_type, entity_description, start_time_abs, srid_epsg,
         end_time_abs, start_time_text, end_time_text, timestamp_creation, name_path,
-        x_lon_easting, y_lat_northing
+        x_lon_easting, y_lat_northing,
+        dim_width, dim_length, dim_height, dim_thickness, dim_diameter, dim_weight, dim_degrees
     FROM openatlas.stratigraphical_units;"""
 cursor_ostalpen.execute(sql_)
 strati = []
@@ -400,6 +420,14 @@ for row in cursor_ostalpen.fetchall():
     e.srid_epsg = row.srid_epsg
     e.x = row.x_lon_easting
     e.y = row.y_lat_northing
+    e.dim = {
+        'Width': row.dim_width,
+        'Length': row.dim_length,
+        'Height': row.dim_height,
+        'Thickness': row.dim_thickness,
+        'Diameter': row.dim_diameter,
+        'Weight': row.dim_weight,
+        'Degrees': row.dim_degrees}
     strati.append(e)
 
 for e in strati:
@@ -411,7 +439,7 @@ for e in strati:
     p.system_type = 'place location'
     p.class_code = 'E53'
     p.name = 'Location of ' + e.name
-    location_id = insert_entity(e)
+    location_id = insert_entity(p)
     link('P53', object_id, location_id)
     if e.srid_epsg and e.x and e.y:
         sql = """
@@ -429,7 +457,8 @@ sql_ = """
     SELECT
         uid, entity_name_uri, entity_type, entity_description, start_time_abs, srid_epsg,
         end_time_abs, start_time_text, end_time_text, timestamp_creation, name_path,
-        x_lon_easting, y_lat_northing
+        x_lon_easting, y_lat_northing,
+        dim_width, dim_length, dim_height, dim_thickness, dim_diameter, dim_weight, dim_degrees
     FROM openatlas.finds;"""
 cursor_ostalpen.execute(sql_)
 finds = []
@@ -446,6 +475,14 @@ for row in cursor_ostalpen.fetchall():
     e.srid_epsg = row.srid_epsg
     e.x = row.x_lon_easting
     e.y = row.y_lat_northing
+    e.dim = {
+        'Width': row.dim_width,
+        'Length': row.dim_length,
+        'Height': row.dim_height,
+        'Thickness': row.dim_thickness,
+        'Diameter': row.dim_diameter,
+        'Weight': row.dim_weight,
+        'Degrees': row.dim_degrees}
     finds.append(e)
 
 for e in finds:

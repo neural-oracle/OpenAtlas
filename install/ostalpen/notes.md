@@ -10,24 +10,7 @@ python3 install/ostalpen/import.py
 
 ### Search and replace following strings in Ostalpen SQL
 
-    ; Owner: openatla
-
-with
-
-    ; Owner: openatlas
-
-and
-
-    openatla;
-    openatla_wavemaker;
-    openatla_watzingeralex;
-    openatla_bergnermax;
-    openatla_gutjahrchristoph;
-    openatla_jansaviktor;
-
-with
-
-    openaltas;
+    openatla; with openaltas;
 
 ### Create new database
 
@@ -39,11 +22,7 @@ with
 - change settings (mail!)
 - change content text
 
-## Create DPP database from PHP version dump
-
-### Search and replace
-
-    openatlas_dpp with openatlas
+## Create new current DPP database
 
 ### Created new database
 
@@ -53,12 +32,8 @@ with
 
 ### Execute upgrades
 
-    psql install/upgrade/openatlas_dpp_origin < 3.0.0.sql
-    psql install/upgrade/openatlas_dpp_origin < 3.2.0.sql
-
-### Change passwords
-
-The new version needs new passwords for user
+    psql openatlas_dpp_origin < install/upgrade/3.6.0.sql
+    deactivate mail in admin
 
 ### Make a new SQL dump
 
