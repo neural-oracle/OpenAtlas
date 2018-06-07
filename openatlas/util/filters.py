@@ -4,6 +4,7 @@ import re
 
 import flask
 import jinja2
+from collections import OrderedDict
 from flask import g, render_template_string, request, url_for
 from flask_babel import lazy_gettext as _
 from flask_login import current_user
@@ -320,15 +321,23 @@ def display_menu(self, origin):
     html = ''
     if current_user.is_authenticated:
         selected = util.get_view_name(origin) if origin else ''
-        items = ['overview', 'source', 'event', 'actor', 'place', 'reference', 'types', 'admin']
-        for item in items:
+        items = OrderedDict()
+        items['overview'] = 'home'
+        items['source'] = 'box'
+        items['event'] = 'calendar'
+        items['actor'] = 'user'
+        items['place'] = 'map'
+        items['reference'] = 'link'
+        items['types'] = 'file-text'
+        items['admin'] = 'settings'
+        for item, icon in items.items():
             if selected:
                 css = 'active' if item == selected else ''
             else:
                 css = 'active' if request.path.startswith('/' + item) or \
                                   (item == 'overview' and request.path == '/') else ''
-            html += '<div class="{css}"><a href="/{item}">{label}</a></div>'.format(
-                css=css, item=item, label=util.uc_first(_(item)))
+            html += '<li class="nav-item"><a href="/{item}" class="nav-link {css}"><i class="fe fe-{icon}"></i>{label}</a></li>'.format(
+                css=css, item=item, icon=icon, label=util.uc_first(_(item)))
     return html
 
 

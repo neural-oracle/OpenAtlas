@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="{{ session['language'] }}">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="theme-color" content="#ffffff" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png" />
+        <link rel="icon" type="image/png" href="/static/favicon-32x32.png" sizes="32x32" />
+        <link rel="icon" type="image/png" href="/static/favicon-16x16.png" sizes="16x16" />
+        <link rel="manifest" href="/static/manifest.json" />
+        <link rel="mask-icon" href="/static/safari-pinned-tab.svg" />
+        <link rel="stylesheet" href="/static/css/reset.css?v={{ config['VERSION'] }}" />
+        <link rel="stylesheet" href="/static/vendor/jquery/jquery-ui-1.12.1/jquery-ui.min.css" />
+        <link rel="stylesheet" href="/static/vendor/jquery/jstree-3.3.4/themes/default/style.min.css" />
+        {% for css_file in ['style.css', 'color.css', 'images.css'] %}
+            <link rel="stylesheet" href="/static/css/{{ css_file }}?v={{ config['VERSION'] }}" />
+            {% if current_user.is_authenticated %}
+                {% set css_file_path = '/static/themes/' + current_user.settings['theme'] + '/css/' + css_file %}
+                {% if css_file_path|test_file %}
+                    <link rel="stylesheet" href="{{ css_file_path }}?v={{ config['VERSION'] }}" />
+                {% endif %}
+            {% endif %}
+        {% endfor %}
+        <script src="/static/vendor/jquery/jquery-3.1.1.min.js"></script>
+        <script src="/static/vendor/jquery/jquery-ui-1.12.1/jquery-ui.min.js"></script>
+        <script src="/static/vendor/jquery/tablesorter-2.28.5/js/jquery.tablesorter.min.js"></script>
+        <script src="/static/vendor/jquery/tablesorter-2.28.5/js/jquery.tablesorter.widgets.min.js"></script>
+        <script src="/static/vendor/jquery/tablesorter-2.28.5/js/extras/jquery.tablesorter.pager.min.js"></script>
+        <script src="/static/vendor/jquery/tablesorter-2.28.5/js/parsers/parser-input-select.min.js"></script>
+        <script src="/static/vendor/jquery/jquery-validation-1.15.0/jquery.validate.min.js"></script>
+        <script src="/static/vendor/jquery/jstree-3.3.4/jstree.min.js"></script>
+        <script src="/static/vendor/jquery/jstree-3.3.4/jstree.search.js"></script>
+        <script src="/static/vendor/tinymce/tinymce.min.js"></script>
+        {% if gis_data %}
+            {% include "map.html" %}
+        {% endif %}
+        <script>
+            minimumPasswordLength = {{ session['settings']['minimum_password_length'] }};
+            show = '{{ _('show')|uc_first }}';
+            hide = '{{ _('hide')|uc_first }}';
+            moreText = '{{ _('show more')|uc_first }}';
+            lessText = '{{ _('show less')|uc_first }}';
+            maxFileSize = {{ session['settings']['file_upload_max_size'] }}
+        </script>
+        <script src="/static/js/functions.js"></script>
+        <script src="/static/js/forms.js"></script>
+        {% set js_translation_file = '/static/js/messages_' + session['language'] + '.js' %}
+        {% if js_translation_file|test_file %}
+            <script src="{{ js_translation_file }}"></script>
+        {% endif %}
+        <title>
+            {{ session['settings']['site_name'] }}
+            {{ ' - ' + request.path.split('/')[1]|uc_first if request.path.split('/')[1] else '' }}
+        </title>
+    </head>
+    <body>
+        <div id="header">
+            <div id="logo"><a href="/"></a></div>
+            <div id="site-name">
+                {{ session['settings']['site_name'] }}
+                {% if 'local' in request['url_root'] %}local{% endif %}
+                <noscript><div class="error">{{ _('warning no js') }}</div></noscript>
+                <br /><br />
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="message {{ category }}">{{ message|uc_first }}</div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+            </div>
+            <div id="header-menu">
+                <div>
+                    {{ _('version')|uc_first }} {{ config['VERSION'] }} -
+                    <a href="{{ url_for('index_changelog') }}">{{ _('changelog')|uc_first }}</a>
+                    - <a href="https://redmine.craws.net/projects/uni/wiki/Manual" target="_blank" rel="noopener">{{ _('manual')|uc_first }}</a>
+                    - <a href="{{ url_for('model_index') }}">{{ _('model')|uc_first }}</a>
+                    - <a href="{{ url_for('index_credits') }}">{{ _('credits')|uc_first }}</a>
+                    {% if 'contact'|display_content_translation %}
+                        - <a href="{{ url_for('index_content', item='contact') }}">{{ _('contact')|uc_first }}</a>
+                    {% endif %}
+                    {% if 'legal_notice'|display_content_translation %}
+                        - <a href="{{ url_for('index_content', item='legal_notice') }}">{{ _('legal_notice')|uc_first }}</a>
+                    {% endif %}
+                </div>
+                {% if current_user.is_authenticated %}
+                    <div id="greeting">
+                        {{ _('hello')|uc_first }} {{ current_user.username }} |
+                        <a href="{{ url_for('profile_index') }}">{{ _('profile')|uc_first }}</a>
+                    </div>
+                    <div style="clear:both;"></div>
+                {% endif %}
+                <div id="language-menu">
+                    <img class="zoom" src="/static/images/icons/zoom-in.png" title="{{ _('zoom in') }}" onclick="resizeText(1)" alt="{{ _('zoom in') }}" />
+                    <img class="zoom" src="/static/images/icons/zoom-out.png" title="{{ _('zoom out') }}" onclick="resizeText(-1)" alt="{{ _('zoom out') }}" />
+                    {% for language in config['LANGUAGES'].keys()|sort %}
+                        {% if 'language' in session and session['language'] == language %}
+                            <span>{{ language|upper }}</span>
+                        {% else %}
+                            <a href="{{ url_for('set_locale', language=language) }}">{{ language|upper }}</a>
+                        {% endif %}
+                    {% endfor %}
+                    {% if current_user.is_authenticated %}
+                        <a href="/logout" style="margin-left:1em;">{{ _('logout')|uc_first }}</a>
+                    {% else %}
+                        <a href="/login" style="margin-left:1em;">{{ _('login')|uc_first }}</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div id="menu">
+            {{ origin|display_menu|safe }}
+            {% if current_user.is_authenticated %}
+                <div id="index-search">
+                    <form method="post" action="{{ url_for('index_search') }}">
+                        {{ search_form.csrf_token }}
+                        {{ search_form.term }}
+                        {{ search_form.search}}
+                    </form>
+                </div>
+            {% endif %}
+        </div>
+        <div id="breadcrumb">
+            {% block breadcrumb %}{% endblock %}
+        </div>
+        <main>
+            <div id="content">
+                <div style="float:left">{% block content %}{% endblock %}</div>
+                {% if session['settings']['debug_mode'] and 'admin'|is_authorized %}
+                    <div class="data-table" style="float:right;margin:1em;">
+                        <p>Debug</p>
+                        {{ debug_model|display_debug_info(form)|safe }}
+                    </div>
+                {% endif %}
+                {% if 'craws.net' in request['url_root'] %}
+                    <div style="clear:both;"></div>
+                    <div id="powered-by">
+                        Another <a target="_blank" rel="noopener" href="http://openatlas.eu">OpenAtlas</a>
+                        project powered by <a target="_blank" rel="noopener" href="https://craws.net">craws.net</a>
+                    </div>
+                {% endif %}
+                <div style="clear:both"></div>
+            </div>
+        </main>
+    </body>
+</html>
