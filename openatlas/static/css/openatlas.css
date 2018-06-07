@@ -1,3 +1,8 @@
 .header-brand-img {
   height: 5rem;
 }
+
+.container-fluid {
+  padding-right: 1.5rem;
+  padding-left: 1.5rem;
+}

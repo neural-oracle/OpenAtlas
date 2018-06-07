@@ -3,16 +3,23 @@
     {{ _('place')|uc_first }}
 {% endblock %}
 {% block content %}
-    <div style="float:left;">
-        {% if 'editor'|is_authorized %}
-            <div class="button-bar">
-                <a href="{{ url_for('place_insert') }}">+ {{ _('place')|uc_first }}</a>
-            </div>
-        {% endif %}
+    <div class="col-lg-4">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">All Places</h3>
+          {% if 'editor'|is_authorized %}
+            <a href="{{ url_for('place_insert') }}" class="btn btn-sm btn-outline-primary ml-auto">+ {{ _('place')|uc_first }}</a>
+          {% endif %}
+        </div>
         {{ table|pager|safe }}
+      </div>
     </div>
     {% if gis_data %}
+    <div class="col-lg-8">
+      <div class="card">
         <div id="map" class="map"></div>
         <script src="/static/js/map.js"></script>
+      </div>
+    </div>
     {% endif %}
 {% endblock %}

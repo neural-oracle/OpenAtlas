@@ -4,13 +4,6 @@ html, body, input, select, textarea {
     font-family: helvetica, arial, sans-serif;
 }
 
-#map {
-    float: left;
-    height: 440px;
-    width: 600px;
-    margin-left: 1em;
-}
-
 input[type="text"].value-type {
     width: 4em;
     text-align: right;
@@ -337,68 +330,6 @@ h2 {
     margin: 1em 0;
 }
 
-/* tables */
-table {
-    border-collapse: inherit;
-    border-spacing: 0.2em;
-}
-
-table.tablesorter {
-    text-align: left;
-    margin-bottom: 0.5em;
-}
-
-table.tablesorter thead tr th, table.tablesorter tfoot tr th {
-    font-weight: bold;
-    padding: 0.4em 2em 0.4em 0.4em;
-}
-
-table.tablesorter tbody td {
-    padding: 0.3em;
-    vertical-align: top;
-}
-
-table.tablesorter thead tr th.sorter-false {
-    background-color: inherit;
-    border: none;
-    cursor: default;
-}
-
-.tablesorter .filtered {
-    display: none;
-}
-
-div.data-table, textarea {
-    margin-bottom: 0.5em;
-}
-
-div.data-table > div {
-    display: table-row;
-}
-
-div.data-table > div > div {
-    display: table-cell;
-    padding: 0.2em 0.6em 0.2em 0;
-    width: inherit;
-}
-
-form div.table-row div {
-    text-align: right;
-    vertical-align: top;
-}
-
-form div.table-row div label {
-    display: inline-block;
-    margin-top: 0.3em;
-}
-
-form div.table-row div.table-cell {
-    text-align: left;
-}
-
-form div.table-row div.table-cell div {
-    margin-top: 0.3em;
-}
 
 label.error {
     padding-left: 0.5em;

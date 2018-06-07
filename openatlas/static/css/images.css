@@ -23,7 +23,7 @@ div.preview img {
 
 table.tablesorter thead tr .tablesorter-header {
     background-image: url("/static/images/icons/arrow_updown.png");
-    background-position: right 0.4em top 0.4em;
+    background-position: right 0.4em top 0.8em;
     background-repeat: no-repeat;
     cursor: pointer;
 }

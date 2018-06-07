@@ -3,12 +3,19 @@
     {{ _('reference')|uc_first }}
 {% endblock %}
 {% block content %}
-    {% if 'editor'|is_authorized %}
-        <div class="button-bar">
-            <a href="{{ url_for('reference_insert', code='bibliography') }}">+ {{ _('bibliography')|uc_first }}</a>
-            <a href="{{ url_for('reference_insert', code='edition') }}">+ {{ _('edition')|uc_first }}</a>
-            <a href="{{ url_for('reference_insert', code='carrier') }}">+ {{ 'E84'|get_class_name }}</a>
+    <div class="col-lg-12">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">All References</h3>
+          {% if 'editor'|is_authorized %}
+              <div class="button-bar">
+                  <a href="{{ url_for('reference_insert', code='bibliography') }}">+ {{ _('bibliography')|uc_first }}</a>
+                  <a href="{{ url_for('reference_insert', code='edition') }}">+ {{ _('edition')|uc_first }}</a>
+                  <a href="{{ url_for('reference_insert', code='carrier') }}">+ {{ 'E84'|get_class_name }}</a>
+              </div>
+          {% endif %}
         </div>
-    {% endif %}
-    {{ table|pager|safe }}
+        {{ table|pager|safe }}
+      </div>
+    </div>
 {% endblock %}

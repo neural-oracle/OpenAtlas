@@ -23,9 +23,7 @@
         {{ ' - ' + request.path.split('/')[1]|uc_first if request.path.split('/')[1] else '' }}
     </title>
     <!-- OLD OPENATLAS LIBS START -->
-    <link rel="stylesheet" href="/static/css/reset.css?v={{ config['VERSION'] }}" />
     <link rel="stylesheet" href="/static/vendor/jquery/jquery-ui-1.12.1/jquery-ui.min.css" />
-    <link rel="stylesheet" href="/static/vendor/jquery/jstree-3.3.4/themes/default/style.min.css" />
     {% for css_file in ['style.css', 'color.css', 'images.css'] %}
         <link rel="stylesheet" href="/static/css/{{ css_file }}?v={{ config['VERSION'] }}" />
         {% if current_user.is_authenticated %}
@@ -193,11 +191,7 @@
         <div class="my-3 my-md-5">
           <div class="container-fluid">
             <div class="row">
-              <div class="col-lg-12">
-                <div id="content">
-                  {% block content %}{% endblock %}
-                </div>
-              </div>
+              {% block content %}{% endblock %}
             </div>
           </div>
         </div>

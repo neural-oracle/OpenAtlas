@@ -481,7 +481,7 @@ def pager(table):
                     placeholder="{filter}">
             </div><div style="clear:both;"></div>
             """.format(id=table['id'], filter=uc_first(_('filter')), options=options)
-    html += '<table id="{id}-table" class="tablesorter"><thead><tr>'.format(id=table['id'])
+    html += '<table id="{id}-table" class="table card-table table-striped table-vcenter"><thead><tr>'.format(id=table['id'])
     for header in table['header']:
         style = '' if header else 'class=sorter-false '  # only show and sort headers with a title
         html += '<th ' + style + '>' + (_(header).capitalize() if header else '') + '</th>'
