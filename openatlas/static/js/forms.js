@@ -10,9 +10,9 @@ $(document).ready(function () {
         return this.optional(element) || element.files[0].size <= param;
     }, 'This file it too large, allowed are ' + maxFileSize + ' MB');
 
-    $('#tabs').tabs();
     $('#show_passwords').show();
     $(".date-switch").addClass('display-none');
+    $(".value-type-switch").addClass('display-none');
     $('label[for="show_passwords"]').css('display', 'block');
     $('#show_passwords').change(function() {
         $('#password')[0].type = this.checked ? 'text' : 'password';
@@ -57,7 +57,8 @@ $(document).ready(function () {
     $.validator.addClassRules({
         year: {number: true, min: -4713, max: 9999},
         month: {digits: true, min: 1, max: 12},
-        day: {digits: true, min: 1, max: 31}
+        day: {digits: true, min: 1, max: 31},
+        "value-type": {number: true}
     });
     $("form").each(function () {
         $(this).validate();

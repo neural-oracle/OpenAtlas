@@ -25,16 +25,16 @@
         {% if object_.system_type == 'place' %}
             <li><a href="#tab-feature">{{ _('feature')|uc_first }}  ({{ tables['feature']['data']|length }})</a></li>
         {% elif object_.system_type == 'feature' %}
-            <li><a href="#tab-stratigraphic_unit">{{ _('stratigraphic unit')|uc_first }}  ({{ tables['stratigraphic_unit']['data']|length }})</a></li>
-        {% elif object_.system_type == 'stratigraphic_unit' %}
+            <li><a href="#tab-stratigraphic-unit">{{ _('stratigraphic unit')|uc_first }}  ({{ tables['stratigraphic-unit']['data']|length }})</a></li>
+        {% elif object_.system_type == 'stratigraphic unit' %}
             <li><a href="#tab-find">{{ _('find')|uc_first }}  ({{ tables['find']['data']|length }})</a></li>
         {% endif %}
     </ul>
     <div id="tab-info">
         <div class="button-bar">
-            {% if 'editor'|is_authorized: %}
+            {% if 'editor'|is_authorized %}
                 <a href="{{ url_for('place_update', id_=object_.id) }}">{{ _('edit')|uc_first }}</a>
-                {% if not has_subunits: %}
+                {% if not has_subunits %}
                     {{ object_|display_delete_link|safe }}
                 {% endif %}
             {% endif %}
@@ -48,7 +48,7 @@
         <div id="tab-map">
             <div id="map" class="map" style="float:none;margin:0;width:70em;"></div>
         </div>
-        <script src="/static/vendor/leaflet/map.js"></script>
+        <script src="/static/js/map.js"></script>
         <script>
             /* workaround for leaflet bug when map not in the first tab */
             $("body").on('click','#map-tab-id', function() {
@@ -57,7 +57,7 @@
         </script>
     {% endif %}
     <div id="tab-source">
-        {% if 'editor'|is_authorized: %}
+        {% if 'editor'|is_authorized %}
             <div class="button-bar">
                 <a href="{{ url_for('source_add', origin_id=object_.id) }}">{{ _('add')|uc_first }}</a>
                 <a href="{{ url_for('source_insert', origin_id=object_.id) }}">+ {{ _('source')|uc_first }}</a>
@@ -76,18 +76,17 @@
         </div>
     {% endif %}
     <div id="tab-reference">
-        {% if 'editor'|is_authorized: %}
+        {% if 'editor'|is_authorized %}
             <div class="button-bar">
                 <a href="{{ url_for('reference_add', origin_id=object_.id)}}">{{ _('add')|uc_first }}</a>
                 <a href="{{ url_for('reference_insert', code='bibliography', origin_id=object_.id) }}">+ {{ _('bibliography')|uc_first }}</a>
                 <a href="{{ url_for('reference_insert', code='edition', origin_id=object_.id) }}">+ {{ _('edition')|uc_first }}</a>
-                <a href="{{ url_for('reference_insert', code='carrier', origin_id=object_.id) }}">+ {{ 'E84'|get_class_name }}</a>
             </div>
         {% endif %}
         {{ tables['reference']|pager|safe }}
     </div>
     <div id="tab-file">
-        {% if 'editor'|is_authorized: %}
+        {% if 'editor'|is_authorized %}
             <div class="button-bar">
                 <a href="{{ url_for('file_add', origin_id=object_.id)}}">{{ _('add')|uc_first }}</a>
                 <a href="{{ url_for('file_insert', origin_id=object_.id) }}">+ {{ _('file')|uc_first }}</a>
@@ -103,13 +102,13 @@
             {{ tables['feature']|pager|safe }}
         </div>
     {% elif object_.system_type == 'feature' %}
-        <div id="tab-stratigraphic_unit">
+        <div id="tab-stratigraphic-unit">
             <div class="button-bar">
                 <a href="{{ url_for('place_insert', origin_id=object_.id)}}">+ {{ _('stratigraphic unit')|uc_first }}</a>
             </div>
-            {{ tables['stratigraphic_unit']|pager|safe }}
+            {{ tables['stratigraphic-unit']|pager|safe }}
         </div>
-    {% elif object_.system_type == 'stratigraphic_unit' %}
+    {% elif object_.system_type == 'stratigraphic unit' %}
         <div id="tab-find">
             <div class="button-bar">
                 <a href="{{ url_for('place_insert', origin_id=object_.id)}}">+ {{ _('find')|uc_first }}</a>

@@ -4,7 +4,7 @@
 {% endblock %}
 {% block content %}
     <div style="float:left;">
-        {% if 'editor'|is_authorized: %}
+        {% if 'editor'|is_authorized %}
             <div class="button-bar">
                 <a href="{{ url_for('place_insert') }}">+ {{ _('place')|uc_first }}</a>
             </div>
@@ -13,6 +13,6 @@
     </div>
     {% if gis_data %}
         <div id="map" class="map"></div>
-        <script src="/static/vendor/leaflet/map.js"></script>
+        <script src="/static/js/map.js"></script>
     {% endif %}
 {% endblock %}

@@ -1,5 +1,4 @@
 # Created by Alexander Watzinger and others. Please see README.md for licensing information
-import ast
 from collections import OrderedDict
 
 from flask import g
@@ -18,12 +17,12 @@ class Entity:
             logger.log('error', 'model', 'invalid id')
             abort(418)
         self.id = row.id
-        self.nodes = []
+        self.nodes = dict()
         if hasattr(row, 'types') and row.types:
-            nodes_list = ast.literal_eval('[' + row.types + ']')
-            # converting nodes_list to set, to list to avoid duplicates (from the sql statement)
-            for node_id in list(set(nodes_list)):
-                self.nodes.append(g.nodes[node_id])
+            for node in row.types:
+                if not node['f1']:
+                    continue
+                self.nodes[g.nodes[node['f1']]] = node['f2']
         self.name = row.name
         self.root = None
         self.description = row.description if row.description else ''
@@ -78,7 +77,7 @@ class Entity:
             root_name = 'License'
         elif view_name == 'place':
             root_name = uc_first(self.system_type)
-            if self.system_type == 'stratigraphic_unit':
+            if self.system_type == 'stratigraphic unit':
                 root_name = 'Stratigraphic Unit'
         root_id = NodeMapper.get_hierarchy_by_name(root_name).id
         for node in self.nodes:
@@ -90,7 +89,7 @@ class Entity:
         """ Returns name part of a directed type e.g. Actor Actor Relation: Parent of (Child of)"""
         from openatlas.util.util import sanitize
         name_parts = self.name.split(' (')
-        if inverse and len(name_parts) > 1:
+        if inverse and len(name_parts) > 1:  # pragma: no cover
             return sanitize(name_parts[1], 'node')
         return name_parts[0]
 
@@ -100,7 +99,7 @@ class EntityMapper:
         SELECT
             e.id, e.class_code, e.name, e.description, e.created, e.modified,
             e.value_integer, e.system_type,
-            string_agg(CAST(t.range_id AS text), ',') AS types,
+            array_to_json(array_agg((t.range_id, t.description))) as types,
             min(date_part('year', d1.value_timestamp)) AS first,
             max(date_part('year', d2.value_timestamp)) AS last
 
@@ -311,9 +310,9 @@ class EntityMapper:
         debug_model['div sql'] += 1
         entities = []
         for row in g.cursor.fetchall():
-            if row.class_code == 'E82':  # if found in actor alias
+            if row.class_code == 'E82':  # If found in actor alias
                 entities.append(LinkMapper.get_linked_entity(row.id, 'P131', True))
-            elif row.class_code == 'E41':  # if found in place alias
+            elif row.class_code == 'E41':  # If found in place alias
                 entities.append(LinkMapper.get_linked_entity(row.id, 'P1', True))
             else:
                 entities.append(Entity(row))

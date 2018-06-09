@@ -1,5 +1,5 @@
 # Created by Alexander Watzinger and others. Please see README.md for licensing information
-from flask import abort, flash, g, session
+from flask import abort, flash, g
 from flask_babel import lazy_gettext as _
 
 from openatlas import app, debug_model, logger
@@ -16,6 +16,9 @@ class Link:
         self.domain = EntityMapper.get_by_id(row.domain_id)
         self.range = EntityMapper.get_by_id(row.range_id)
         self.type = g.nodes[row.type_id] if row.type_id else None
+        self.nodes = dict()
+        if hasattr(row, 'type_id') and row.type_id:
+            self.nodes[g.nodes[row.type_id]] = None
         self.first = int(row.first) if hasattr(row, 'first') and row.first else None
         self.last = int(row.last) if hasattr(row, 'last') and row.last else None
         self.dates = {}
@@ -42,28 +45,26 @@ class LinkMapper:
         for range_ in range_:
             domain_id = domain if isinstance(domain, int) else domain.id
             range_id = range_ if isinstance(range_, int) else range_.id
-            if 'settings' in session and session['settings']['debug_mode']:  # pragma: no cover
-                from openatlas.models.entity import EntityMapper
-                domain = domain if not isinstance(domain, int) else EntityMapper.get_by_id(domain)
-                range_ = range_ if not isinstance(range_, int) else EntityMapper.get_by_id(range_)
-                domain_class = g.classes[domain.class_.code]
-                range_class = g.classes[range_.class_.code]
-                property_ = g.properties[property_code]
-                ignore = app.config['WHITELISTED_DOMAINS']
-                domain_error = True
-                range_error = True
-                if property_.find_object('domain_class_code', domain_class.code):
-                    domain_error = False
-                if domain_class.code in ignore:
-                    domain_error = False
-                if property_.find_object('range_class_code', range_class.code):
-                    range_error = False
-                if domain_error or range_error:
-                    text = _('error link') + ': ' + domain_class.code + ' > '
-                    text += property_code + ' > ' + range_class.code
-                    logger.log('error', 'model', text)
-                    flash(text, 'error')
-                    continue
+            # Commented if below because unsure if link testing in debug mode only is a good idea
+            # if 'settings' in session and session['settings']['debug_mode']:
+            from openatlas.models.entity import EntityMapper
+            domain = domain if not isinstance(domain, int) else EntityMapper.get_by_id(domain)
+            range_ = range_ if not isinstance(range_, int) else EntityMapper.get_by_id(range_)
+            domain_class = g.classes[domain.class_.code]
+            range_class = g.classes[range_.class_.code]
+            property_ = g.properties[property_code]
+            domain_error = True
+            range_error = True
+            if property_.find_object('domain_class_code', domain_class.code):
+                domain_error = False
+            if property_.find_object('range_class_code', range_class.code):
+                range_error = False
+            if domain_error or range_error:
+                text = _('error link') + ': ' + domain_class.code + ' > '
+                text += property_code + ' > ' + range_class.code
+                logger.log('error', 'model', text)
+                flash(text, 'error')
+                continue
             sql = """
                 INSERT INTO model.link (property_code, domain_id, range_id, description)
                 VALUES (%(property_code)s, %(domain_id)s, %(range_id)s, %(description)s)
@@ -181,3 +182,50 @@ class LinkMapper:
             'range_id': link.range.id,
             'description': link.description})
         debug_model['div sql'] += 1
+
+    @staticmethod
+    def check_links():
+        """ Check all existing links for CIDOC CRM validity and return the invalid ones."""
+        from openatlas.util.util import link
+        from openatlas.models.entity import EntityMapper
+        sql = """
+            SELECT DISTINCT l.property_code AS property, d.class_code AS domain,
+                r.class_code AS range
+            FROM model.link l
+            JOIN model.entity d ON l.domain_id = d.id
+            JOIN model.entity r ON l.range_id = r.id;"""
+        g.cursor.execute(sql)
+        invalid_links = []
+        for row in g.cursor.fetchall():
+            property_ = g.properties[row.property]
+            domain_is_valid = property_.find_object('domain_class_code', row.domain)
+            range_is_valid = property_.find_object('range_class_code', row.range)
+            invalid_linking = []
+            if not domain_is_valid or not range_is_valid:
+                invalid_linking.append({
+                    'property': row.property,
+                    'domain': row.domain,
+                    'range': row.range})
+            for item in invalid_linking:
+                sql = """
+                    SELECT l.id, l.property_code, l.domain_id, l.range_id, l.description,
+                        l.created, l.modified
+                    FROM model.link l
+                    JOIN model.entity d ON l.domain_id = d.id
+                    JOIN model.entity r ON l.range_id = r.id
+                    WHERE
+                        l.property_code = %(property)s AND
+                        d.class_code = %(domain)s AND
+                        r.class_code = %(range)s;"""
+                g.cursor.execute(sql, {
+                    'property': item['property'],
+                    'domain': item['domain'],
+                    'range': item['range']})
+                for row2 in g.cursor.fetchall():
+                    domain = EntityMapper.get_by_id(row2.domain_id)
+                    range_ = EntityMapper.get_by_id(row2.range_id)
+                    invalid_links.append({
+                        'domain': link(domain) + ' (' + domain.class_.code + ')',
+                        'property': link(g.properties[row2.property_code]),
+                        'range': link(range_) + ' (' + range_.class_.code + ')'})
+        return invalid_links
