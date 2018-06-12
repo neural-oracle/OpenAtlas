@@ -65,18 +65,19 @@ def source_view(id_, unlink_id=None):
     for text in source.get_linked_entities('P73'):
         tables['text']['data'].append([
             link(text),
-            text.nodes[0].name if text.nodes else '',
+            next(iter(text.nodes)).name if text.nodes else '',
             truncate_string(text.description)])
-    for name in ['event', 'place', 'actor']:
+    for name in ['actor', 'event', 'place', 'feature', 'stratigraphic-unit', 'find']:
         tables[name] = {'id': name, 'header': app.config['TABLE_HEADERS'][name], 'data': []}
     for link_ in source.get_links('P67'):
         data = get_base_table_data(link_.range)
         view_name = get_view_name(link_.range)
+        view_name = view_name if view_name != 'place' else link_.range.system_type.replace(' ', '-')
         if is_authorized('editor'):
             unlink = url_for('source_view', id_=source.id, unlink_id=link_.id) + '#tab-' + view_name
             data.append(display_remove_link(unlink, link_.range.name))
         tables[view_name]['data'].append(data)
-    for link_ in source.get_links('P67', True):
+    for link_ in source.get_links(['P67', 'P128'], True):
         data = get_base_table_data(link_.domain)
         view_name = get_view_name(link_.domain)
         if view_name not in ['file']:
@@ -94,7 +95,7 @@ def source_view(id_, unlink_id=None):
 @app.route('/source/add/<int:origin_id>', methods=['POST', 'GET'])
 @required_group('editor')
 def source_add(origin_id):
-    """Link an entity to source coming from the entity."""
+    """ Link an entity to source coming from the entity."""
     origin = EntityMapper.get_by_id(origin_id)
     if request.method == 'POST':
         g.cursor.execute('BEGIN')
@@ -114,7 +115,7 @@ def source_add(origin_id):
 @app.route('/source/add2/<int:id_>/<class_name>', methods=['POST', 'GET'])
 @required_group('editor')
 def source_add2(id_, class_name):
-    """Link an entity to source coming from the source"""
+    """ Link an entity to source coming from the source"""
     source = EntityMapper.get_by_id(id_)
     if request.method == 'POST':
         for value in request.form.getlist('values'):

@@ -61,7 +61,7 @@ class NodeMapper(EntityMapper):
         for row in g.cursor.fetchall():
             forms[row.id] = {'id': row.id, 'name': row.name, 'extendable': row.extendable}
         sql = """
-            SELECT h.id, h.name, h.multiple, h.system, h.directional,
+            SELECT h.id, h.name, h.multiple, h.system, h.directional, h.value_type,
                 (SELECT ARRAY(
                     SELECT f.id FROM web.form f JOIN web.hierarchy_form hf ON f.id = hf.form_id
                     AND hf.hierarchy_id = h.id)) AS form_ids
@@ -77,6 +77,7 @@ class NodeMapper(EntityMapper):
                 node.root = NodeMapper.get_root_path(nodes, node, node.root[0], node.root)
                 node.system = False
             else:
+                node.value_type = hierarchies[node.id].value_type
                 node.directional = hierarchies[node.id].directional
                 node.multiple = hierarchies[node.id].multiple
                 node.system = hierarchies[node.id].system
@@ -154,18 +155,23 @@ class NodeMapper(EntityMapper):
         if hasattr(entity, 'nodes'):
             entity.delete_links(['P2', 'P89'])
         for field in form:
-            if isinstance(field, (TreeField, TreeMultiField)) and field.data:
-                try:
-                    range_param = int(field.data)
-                except ValueError:
-                    range_param = ast.literal_eval(field.data)
-                node = g.nodes[int(field.id)]
-                if node.name in ['Administrative Unit', 'Historical Place']:
-                    if entity.class_.code == 'E53':
-                        entity.link('P89', range_param)
-                else:
-                    if entity.class_.code != 'E53':
-                        entity.link('P2', range_param)
+            if field.name.startswith('value_list-'):
+                if field.data:
+                    node_id = int(field.name.replace('value_list-', ''))
+                    entity.link('P2', node_id, field.data)
+            elif isinstance(field, (TreeField, TreeMultiField)) and field.data:
+                root = g.nodes[int(field.id)]
+                if not root.value_type:
+                    try:
+                        range_param = [int(field.data)]
+                    except ValueError:
+                        range_param = ast.literal_eval(field.data)
+                    if root.name in ['Administrative Unit', 'Historical Place']:
+                        if entity.class_.code == 'E53':
+                            entity.link('P89', range_param)
+                    else:
+                        if entity.class_.code != 'E53':
+                            entity.link('P2', range_param)
 
     @staticmethod
     def save_link_nodes(link_id, form):
@@ -175,17 +181,26 @@ class NodeMapper(EntityMapper):
                 LinkPropertyMapper.insert(link_id, 'P2', int(field.data))
 
     @staticmethod
-    def insert_hierarchy(node, form):
+    def insert_hierarchy(node, form, value_type):
         sql = """
-            INSERT INTO web.hierarchy (id, name, multiple)
-            VALUES (%(id)s, %(name)s, %(multiple)s);"""
-        g.cursor.execute(sql, {'id': node.id, 'name': node.name, 'multiple': form.multiple.data})
+            INSERT INTO web.hierarchy (id, name, multiple, value_type)
+            VALUES (%(id)s, %(name)s, %(multiple)s, %(value_type)s);"""
+        multiple = False
+        if hasattr(form, 'multiple') and form.multiple and form.multiple.data:
+            multiple = True
+        g.cursor.execute(sql, {
+            'id': node.id,
+            'name': node.name,
+            'multiple': multiple,
+            'value_type': value_type})
         NodeMapper.add_forms_to_hierarchy(node, form)
 
     @staticmethod
     def update_hierarchy(node, form):
         sql = "UPDATE web.hierarchy SET name = %(name)s, multiple = %(multiple)s WHERE id = %(id)s;"
-        multiple = True if node.multiple or form.multiple.data else False
+        multiple = False
+        if node.multiple or (hasattr(form, 'multiple') and form.multiple and form.multiple.data):
+            multiple = True
         g.cursor.execute(sql, {'id': node.id, 'name': form.name.data, 'multiple': multiple})
         NodeMapper.add_forms_to_hierarchy(node, form)
 
