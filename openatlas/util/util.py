@@ -1,6 +1,5 @@
 # Created by Alexander Watzinger and others. Please see README.md for licensing information
 import glob
-import locale
 import os
 import re
 import smtplib
@@ -14,7 +13,7 @@ from html.parser import HTMLParser
 import numpy
 from babel import dates
 from flask import abort, flash, g, request, session, url_for
-from flask_babel import lazy_gettext as _
+from flask_babel import lazy_gettext as _, format_number
 from flask_login import current_user
 from numpy import math
 from werkzeug.utils import redirect
@@ -47,6 +46,12 @@ def print_file_size(entity):
     return convert_size(os.path.getsize(path)) if path else 'N/A'
 
 
+def display_tooltip(text):
+    if not text:
+        return ''
+    return ' <span class="tooltip" title="{title}">i</span>'.format(title=text.replace('"', "'"))
+
+
 def print_file_extension(entity):
     entity_id = entity if isinstance(entity, int) else entity.id
     path = get_file_path(entity_id)
@@ -64,7 +69,6 @@ def send_mail(subject, text, recipients, log_body=True):  # pragma: no cover
     server = smtplib.SMTP(settings['mail_transport_host'], settings['mail_transport_port'])
     server.ehlo()
     server.starttls()
-    print('try mail')
     try:
         if settings['mail_transport_username']:
             server.login(mail_user, app.config['MAIL_PASSWORD'])
@@ -169,17 +173,26 @@ def get_entity_data(entity, location=None):
     data = []
     # Nodes
     type_data = OrderedDict()
-    nodes = entity.nodes + (location.nodes if location else [])
-    for node in nodes:
+    nodes = entity.nodes
+    if location:
+        nodes.update(location.nodes)
+    for node, node_value in nodes.items():
         if not node.root:
             continue
         root = g.nodes[node.root[-1]]
         name = 'type' if root.name in app.config['BASE_TYPES'] else root.name
         if root.name not in type_data:
             type_data[name] = []
-        type_data[name].append(link(node))
-    type_data = OrderedDict(sorted(type_data.items(), key=lambda t: t[0]))  # sort by name
-    if 'type' in type_data:  # move the base type to the top
+        html = link(node) + (': ' + format_number(node_value) if root.value_type else '')
+        type_data[name].append(html)
+
+    # Sort by name
+    type_data = OrderedDict(sorted(type_data.items(), key=lambda t: t[0]))
+    for root_type in type_data:
+        type_data[root_type].sort()
+
+    # Move the base type to the top
+    if 'type' in type_data:
         type_data.move_to_end('type', last=False)
     for root_name, nodes in type_data.items():
         data.append((root_name, '<br />'.join(nodes)))
@@ -281,12 +294,15 @@ def add_dates_to_form(form, for_person=False):
     html = """
         <div class="table-row">
             <div>
-                <label>{date}</label> <span class="tooltip" title="{tip}">i</span>
+                <label>{date}</label> {tooltip}
             </div>
             <div class="table-cell date-switcher">
                 <span id="date-switcher" class="button">{show}</span>
             </div>
-        </div>""".format(date=uc_first(_('date')), tip=_('tooltip date'), show=uc_first(_('show')))
+        </div>""".format(
+            date=uc_first(_('date')),
+            tooltip=display_tooltip(_('tooltip date')),
+            show=uc_first(_('show')))
     html += '<div class="table-row date-switch" ' + style + '>'
     html += '<div>' + str(form.date_begin_year.label).title() + '</div><div class="table-cell">'
     html += str(form.date_begin_year(class_='year')) + ' ' + errors['date_begin_year'] + ' '

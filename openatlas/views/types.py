@@ -2,10 +2,10 @@
 from collections import OrderedDict
 
 from flask import abort, flash, g, render_template, request, url_for
-from flask_babel import lazy_gettext as _
+from flask_babel import lazy_gettext as _, format_number
 from flask_wtf import Form
 from werkzeug.utils import redirect
-from wtforms import StringField, SubmitField, TextAreaField
+from wtforms import StringField, SubmitField, TextAreaField, HiddenField
 from wtforms.validators import DataRequired
 
 from openatlas import app, logger
@@ -18,25 +18,36 @@ from openatlas.util.util import link, required_group, sanitize, truncate_string
 class NodeForm(Form):
     name = StringField(_('name'), [DataRequired()])
     name_inverse = StringField(_('inverse'))
+    is_node_form = HiddenField()
     description = TextAreaField(_('description'))
     save = SubmitField(_('insert'))
+    insert_and_continue = SubmitField(_('insert and continue'))
+    continue_ = HiddenField()
 
 
 @app.route('/types')
 @required_group('readonly')
 def node_index():
-    nodes = {'system': OrderedDict(), 'custom': OrderedDict(), 'places': OrderedDict()}
+    nodes = {
+        'system': OrderedDict(), 'custom': OrderedDict(),
+        'places': OrderedDict(), 'value': OrderedDict()}
     for id_, node in g.nodes.items():
         if not node.root:
-            type_ = 'system' if node.system else 'custom'
-            type_ = 'places' if node.class_.code == 'E53' else type_
+            type_ = 'custom'
+            if node.class_.code == 'E53':
+                type_ = 'places'
+            elif node.system:
+                type_ = 'system'
+            elif node.value_type:
+                type_ = 'value'
             nodes[type_][node] = tree_select(node.name)
     return render_template('types/index.html', nodes=nodes)
 
 
-@app.route('/types/insert/<int:root_id>', methods=['POST'])
+@app.route('/types/insert/<int:root_id>', methods=['GET', 'POST'])
+@app.route('/types/insert/<int:root_id>/<int:super_id>', methods=['GET', 'POST'])
 @required_group('editor')
-def node_insert(root_id):
+def node_insert(root_id, super_id=None):
     root = g.nodes[root_id]
     form = build_node_form(NodeForm, root)
     # Check if form is valid and if it wasn't a submit of the search form
@@ -44,10 +55,9 @@ def node_insert(root_id):
         name = form.name.data
         if hasattr(form, 'name_inverse') in form:
             name += ' (' + form.name_inverse.data + ')'
-        node = save(form, root=root)
-        if node:
-            flash(_('entity created'), 'info')
-            return redirect(url_for('node_view', id_=node.id))
+        return redirect(save(form, root=root))
+    if super_id:
+        getattr(form, str(root.id)).data = super_id if super_id != root.id else None
     getattr(form, str(root.id)).label.text = 'super'
     if 'name_search' in request.form:
         form.name.data = request.form['name_search']
@@ -63,10 +73,8 @@ def node_update(id_):
     form = build_node_form(NodeForm, node, request)
     root = g.nodes[node.root[-1]] if node.root else None
     if form.validate_on_submit():
-        if save(form, node):
-            flash(_('info update'), 'info')
-            return redirect(url_for('node_view', id_=id_))
-        return render_template('types/update.html', node=node, root=root, form=form)
+        save(form, node)
+        return redirect(url_for('node_view', id_=id_))
     getattr(form, str(root.id)).label.text = 'super'
     return render_template('types/update.html', node=node, root=root, form=form)
 
@@ -117,18 +125,18 @@ def node_delete(id_):
         logger.log('error', 'database', 'transaction failed', e)
         flash(_('error transaction'), 'error')
     root = g.nodes[node.root[-1]] if node.root else None
-    if root:
-        return redirect(url_for('node_view', id_=root.id))
-    return redirect(url_for('node_index'))
+    url = url_for('node_view', id_=root.id) if root else url_for('node_index')
+    return redirect(url)
 
 
 def walk_tree(param):
     text = ''
     for id_ in param if isinstance(param, list) else [param]:
         item = g.nodes[id_]
-        count_subs = " (" + str(item.count_subs) + ")" if item.count_subs else ''
+        count_subs = ' (' + format_number(item.count_subs) + ')' if item.count_subs else ''
         text += "{href: '" + url_for('node_view', id_=item.id) + "',"
-        text += "text: '" + item.name.replace("'", "&apos;") + " " + str(item.count) + count_subs
+        text += "text: '" + item.name.replace("'", "&apos;") + " "
+        text += '<span style="font-weight:normal">' + format_number(item.count) + count_subs
         text += "', 'id':'" + str(item.id) + "'"
         if item.subs:
             text += ",'children' : ["
@@ -163,12 +171,14 @@ def tree_select(name):
 def save(form, node=None, root=None):
     g.cursor.execute('BEGIN')
     try:
-        if not node:
-            node = NodeMapper.insert(root.class_.code, form.name.data)
-            super_ = 'new'
-        else:
+        if node:
+            log_action = 'update'
             root = g.nodes[node.root[-1]] if node.root else None
             super_ = g.nodes[node.root[0]] if node.root else None
+        else:
+            log_action = 'insert'
+            node = NodeMapper.insert(root.class_.code, form.name.data)
+            super_ = 'new'
         new_super_id = getattr(form, str(root.id)).data
         new_super = g.nodes[int(new_super_id)] if new_super_id else g.nodes[root.id]
         if new_super.id == node.id:
@@ -182,15 +192,21 @@ def save(form, node=None, root=None):
             node.name += ' (' + form.name_inverse.data.strip() + ')'
         node.description = form.description.data
         node.update()
-        # update super if changed and node is not a root node
-        if super_ and (super_ == 'new' or super_.id != new_super.id):
+        # Update super if changed and node is not a root node
+        if super_ and (super_ == 'new' or super_.id != new_super_id):
             property_code = 'P127' if node.class_.code == 'E55' else 'P89'
             node.delete_links(property_code)
             node.link(property_code, new_super.id)
         g.cursor.execute('COMMIT')
+        url = url_for('node_view', id_=node.id)
+        if form.continue_.data == 'yes':
+            url = url_for('node_insert', root_id=root.id,
+                          super_id=new_super_id if new_super_id else None)
+        logger.log_user(node.id, log_action)
+        flash(_('entity created') if log_action == 'insert' else _('info update'), 'info')
     except Exception as e:  # pragma: no cover
         g.cursor.execute('ROLLBACK')
         logger.log('error', 'database', 'transaction failed', e)
         flash(_('error transaction'), 'error')
-        return
-    return node
+        url = url_for('node_index')
+    return url

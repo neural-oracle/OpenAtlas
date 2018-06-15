@@ -55,6 +55,12 @@ class AddPlaceForm(Form):
     save = SubmitField(_('insert'))
 
 
+class AddFileForm(Form):
+    file = TableField(_('file'))
+    page = StringField(_('page'))
+    save = SubmitField(_('insert'))
+
+
 @app.route('/reference/add/<int:origin_id>', methods=['POST', 'GET'])
 @required_group('editor')
 def reference_add(origin_id):
@@ -76,7 +82,8 @@ def reference_add2(reference_id, class_name):
     reference_ = EntityMapper.get_by_id(reference_id)
     form = getattr(openatlas.views.reference, 'Add' + uc_first(class_name) + 'Form')()
     if form.validate_on_submit():
-        reference_.link('P67', int(getattr(form, class_name).data), form.page.data)
+        property_code = 'P128' if reference_.class_.code == 'E84' else 'P67'
+        reference_.link(property_code, int(getattr(form, class_name).data), form.page.data)
         return redirect(url_for('reference_view', id_=reference_.id) + '#tab-' + class_name)
     return render_template(
         'reference/add2.html', reference=reference_, form=form, class_name=class_name)
@@ -116,8 +123,9 @@ def reference_view(id_, unlink_id=None):
         flash(_('link removed'), 'info')
     tables = {
         'info': get_entity_data(reference),
-        'file': {'id': 'files', 'data': [], 'header': app.config['TABLE_HEADERS']['file']}}
-    for name in ['source', 'event', 'actor', 'place']:
+        'file': {'id': 'files', 'data': [],
+                 'header': app.config['TABLE_HEADERS']['file'] + ['page']}}
+    for name in ['source', 'event', 'actor', 'place', 'feature', 'stratigraphic-unit', 'find']:
         header = app.config['TABLE_HEADERS'][name] + ['page']
         tables[name] = {'id': name, 'header': header, 'data': []}
     for link_ in reference.get_links('P67', True):
@@ -126,15 +134,16 @@ def reference_view(id_, unlink_id=None):
             unlink = url_for('reference_view', id_=reference.id, unlink_id=link_.id) + '#tab-file'
             data.append(display_remove_link(unlink, link_.domain.name))
         tables['file']['data'].append(data)
-    for link_ in reference.get_links('P67'):
+    for link_ in reference.get_links(['P67', 'P128']):
         view_name = get_view_name(link_.range)
+        view_name = view_name if view_name != 'place' else link_.range.system_type.replace(' ', '-')
         data = get_base_table_data(link_.range)
         data.append(truncate_string(link_.description))
         if is_authorized('editor'):
             update_url = url_for('reference_link_update', link_id=link_.id, origin_id=reference.id)
+            data.append('<a href="' + update_url + '">' + uc_first(_('edit')) + '</a>')
             unlink_url = url_for(
                 'reference_view', id_=reference.id, unlink_id=link_.id) + '#tab-' + view_name
-            data.append('<a href="' + update_url + '">' + uc_first(_('edit')) + '</a>')
             data.append(display_remove_link(unlink_url, link_.range.name))
         tables[view_name]['data'].append(data)
     return render_template('reference/view.html', reference=reference, tables=tables)

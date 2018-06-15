@@ -3,7 +3,7 @@ from collections import OrderedDict
 
 from flask_babel import lazy_gettext as _
 
-VERSION = '3.5.0'
+VERSION = '3.6.0'
 DEBUG = False
 DEMO_MODE = False  # If in demo mode some options are disabled and the login form is pre filled
 
@@ -21,9 +21,6 @@ SECRET_KEY = 'CHANGE ME'
 
 UPLOAD_FOLDER_PATH = os.path.dirname(__file__) + '/../openatlas/uploads'
 DISPLAY_FILE_EXTENSIONS = ['bmp', 'gif', 'ico', 'jpeg', 'jpg', 'png']
-
-# Whitelisted domains are ignored by the link checker
-WHITELISTED_DOMAINS = ['E61']
 
 DEFAULT_TABLE_ROWS = OrderedDict()
 DEFAULT_TABLE_ROWS[10] = '10'
@@ -75,6 +72,9 @@ TABLE_HEADERS = {
     'actor': ['name', 'class', 'first', 'last'],
     'group': ['name', 'class', 'first', 'last'],
     'place': ['name', 'type', 'first', 'last'],
+    'feature': ['name', 'type', 'first', 'last'],
+    'stratigraphic-unit': ['name', 'type', 'first', 'last'],
+    'find': ['name', 'type', 'first', 'last'],
     'reference': ['name', 'class', 'type'],
     'file': ['name', 'license', 'size', 'extension', 'description']}
 
