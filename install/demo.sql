@@ -1,6 +1,6 @@
 -- SQL to filter demo data from DPP
 
--- To do: delete other users
+-- To do: remove orphaned gis data and source translations
 
 BEGIN;
 
@@ -15,7 +15,7 @@ DELETE FROM model.entity WHERE id NOT IN
         e.id = l.domain_id
         AND l.property_code = 'P2'
         AND l.range_id = (SELECT id FROM model.entity WHERE name = 'Ethnonym of the Vlachs'))
-AND class_code IN ('E33', 'E6', 'E7', 'E8', 'E12', 'E21', 'E74', 'E40', 'E31', 'E18', 'E53', 'E84')
+AND class_code IN ('E33', 'E6', 'E7', 'E8', 'E12', 'E21', 'E74', 'E40', 'E31', 'E18', 'E84')
 AND (system_type IS NULL OR system_type NOT IN ('source translation'));
 
 -- Delete orphans manually because triggers are disabled
@@ -30,8 +30,8 @@ DELETE FROM model.entity WHERE id IN (
             AND lp2.range_id IS NULL
             AND e.class_code IN ('E61', 'E41', 'E53', 'E82'));
 
--- Delete users except from case studies
--- DELETE FROM web.user WHERE username NOT IN ('admin');
+-- Delete unrelated user
+DELETE FROM web.user WHERE username NOT IN ('admin', 'dschmid', 'bkoschicek', 'mpopovic', 'jnikic');
 
 -- Insert demo user
 INSERT INTO web.user (username, real_name, email, active, group_id, password) VALUES (
