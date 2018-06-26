@@ -1,6 +1,8 @@
 -- SQL to filter demo data from MEDCON
 
--- Disable triggers, otherwise script takes forever
+BEGIN;
+
+-- Disable triggers, otherwise script takes forever and/or run into errors
 ALTER TABLE model.entity DISABLE TRIGGER on_delete_entity;
 ALTER TABLE model.link_property DISABLE TRIGGER on_delete_link_property;
 
@@ -26,3 +28,5 @@ DELETE FROM model.entity WHERE id IN (
 -- Re-enable triggers
 ALTER TABLE model.entity ENABLE TRIGGER on_delete_entity;
 ALTER TABLE model.link_property ENABLE TRIGGER on_delete_link_property;
+
+COMMIT;
