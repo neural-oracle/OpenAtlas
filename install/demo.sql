@@ -1,5 +1,7 @@
 -- SQL to filter demo data from MEDCON
 
+-- To do: add SQL like in DPP demo SQL (settings, user, ...)
+
 BEGIN;
 
 -- Disable triggers, otherwise script takes forever and/or run into errors
